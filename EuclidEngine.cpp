@@ -380,11 +380,6 @@ void EuclidEngine::shutdown() {
 		m_renderer = nullptr;
 	}
 
-	if (m_timer) {
-		sdkDeleteTimer(&m_timer);
-		m_timer = nullptr;
-	}
-
 	if (m_objExportFutureActive && m_objExportFuture.valid()) {
 		m_objExportFuture.wait();
 		m_objExportFutureActive = false;
@@ -394,14 +389,6 @@ void EuclidEngine::shutdown() {
 		m_staticAssetFuture.wait();
 		m_staticAssetFutureActive = false;
 	}
-
-	if (m_particleSimSystem) {
-		delete m_particleSimSystem;
-		m_particleSimSystem = nullptr;
-	}
-
-	m_particleSimRadii.clear();
-	m_particleSimRadii.shrink_to_fit();
 
 #ifdef _WIN32
 
