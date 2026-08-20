@@ -256,42 +256,44 @@ void ViewPort::drawPanelBackground() {
 // =============================================================================
 void ViewPort::drawPresentationHeader(const WorkspacePresentation& presentation) {
 
-	const float x = panelX(m_margin + 48.0f);
+	const float x = panelX(95.0f);
 
-	float y = m_margin + 58.0f;
 	glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
 	
 	drawText2D(
-		x, y,
+		x, 100.0f,
 		"ANAHEIM SYSTEMS DYNAMICS",
 		GLUT_BITMAP_HELVETICA_18
 	);
 
-	y += 28.0f;
-
 	drawText2D(
-		x, y,
+		x, 128.0f,
 		"VitruGen SIMCAD Ver 0.0.4",
 		GLUT_BITMAP_HELVETICA_18
 	);
 
-	y += 48.0f;
-	glColor4f(0.82f, 0.96f, 1.0f, m_panelSlide);
-	
-	drawText2D(
-		x, y,
-		presentation.workspaceName.c_str(),
-		GLUT_BITMAP_HELVETICA_18
-	);
+	float y = 180.0f;
 
-	y += 32.0f;
-	glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
+	if (!presentation.workspaceName.empty()) {
 
-	drawText2D(
-		x, y,
-		presentation.layerLabel.c_str(),
-		GLUT_BITMAP_HELVETICA_18
-	);
+		drawText2D(
+			x, y,
+			presentation.workspaceName.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
+
+	if (!presentation.layerLabel.empty()) {
+
+		y += 32.0f;
+		glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
+
+		drawText2D(
+			x, y,
+			presentation.layerLabel.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
 
 	if (!presentation.subLayerLabel.empty()) {
 
@@ -306,19 +308,6 @@ void ViewPort::drawPresentationHeader(const WorkspacePresentation& presentation)
 		);
 	}
 
-	if (!presentation.statusLine.empty()) {
-
-		y += 42.0f;
-		glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
-
-		drawText2D(
-			x, y,
-			presentation
-			.statusLine
-			.c_str(),
-			GLUT_BITMAP_HELVETICA_18
-		);
-	}
 }
 
 // =============================================================================
@@ -405,42 +394,68 @@ void ViewPort::drawSectionDivider(float y) {
 // =============================================================================
 void ViewPort::drawPresentationSections(const WorkspacePresentation& presentation) {
 
-	float y = 
-		m_margin + 
-		m_headerHeight + 
-		160.0f;
-
-	const float headingX = 
-		m_margin + 
-		48.0f;
-
-	const float rowX =
-		m_margin +
-		78.0f;
+	float y = 245.0f;
+	const float headingX = 95.0f;
+	const float rowX = 95.0f;
+	bool contentDrawn = false;
 
 	for (const WorkspacePanelSection& section : presentation.sections) {
 
-		drawSectionDivider(y);
+		if (!section.heading.empty()) {
 
-		y += m_sectionSpacing;
-		glColor4f(0.85f, 0.95f, 1.0f, m_panelSlide);
+			if (contentDrawn)
+				y += 18.0f;
 
-		drawText2D(
-			panelX(headingX),
-			y,
-			section.heading.c_str(),
-			GLUT_BITMAP_HELVETICA_18
-		);
+			drawSectionDivider(y);
 
-		y += m_rowSpacing;
+			y += m_sectionSpacing;
+			glColor4f(0.85f, 0.95f, 1.0f, m_panelSlide);
+
+			drawText2D(
+				panelX(headingX),
+				y,
+				section.heading.c_str(),
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			y += m_rowSpacing;
+			contentDrawn = true;
+		}
 
 		for (const WorkspacePanelRow& row : section.rows) {
 
 			drawPanelRow(rowX, y, row);
 			y += m_rowSpacing;
+			contentDrawn = true;
+		}
+	}
+
+	if (!presentation.statusLine.empty()) {
+
+		if (contentDrawn)
+			y += 31.0f;
+
+		switch (presentation.statusTone) {
+		case WorkspaceStatusTone::Ready:
+			glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
+			break;
+
+		case WorkspaceStatusTone::Warning:
+			glColor4f(1.0f, 0.45f, 0.45f, m_panelSlide);
+			break;
+
+		case WorkspaceStatusTone::Neutral:
+		default:
+			glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
+			break;
 		}
 
-		y += 18.0f;
+		drawText2D(
+			panelX(rowX),
+			y,
+			presentation.statusLine.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
 	}
 }
 
@@ -449,12 +464,11 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 // =============================================================================
 void ViewPort::drawPresentationFooter(const WorkspacePresentation& presentation) {
 
-	const float x =
-		panelX(m_margin + 48.0f);
+	const float x = panelX(95.0f);
 
 	const float y =
 		static_cast<float>(m_windowHeight) -
-		112.0f;
+		135.0f;
 
 	glColor4f(0.75f, 0.75f, 0.75f, m_panelSlide);
 	
@@ -472,7 +486,7 @@ void ViewPort::drawPresentationFooter(const WorkspacePresentation& presentation)
 	if (!presentation.footerLine2.empty()) {
 
 		drawText2D(
-			x, y + 28.0f,
+			x, y + 34.0f,
 			presentation
 			.footerLine2
 			.c_str(),
@@ -489,7 +503,7 @@ void ViewPort::drawOverlay(const WorkspacePresentation& presentation) {
 	updatePanelAnimation(presentation.panelVisible);
 	beginOverlay2D();
 
-	drawWorkspaceFrame(0.20f, nullptr);
+	drawWorkspaceFrame(0.30f, nullptr);
 
 	if (m_panelSlide > 0.0f) {
 

@@ -3,6 +3,8 @@
 
 #include "IWorkspace.h"
 
+class TheArbiter;
+
 class DiagnosticIdle :
 	public IWorkspace {
 
@@ -32,6 +34,11 @@ public:
 		buildPresentation() const override;
 
 private:
+	const char* selectedEnvironmentName() const;
+	void cycleEnvironment(int direction);
+
+	TheArbiter* m_arbiter = nullptr;
+
 	// 0.0 -> 1.0 : XY sweep
 	// 1.0 -> 2.0 : XZ sweep
 	// 2.0 -> 3.0 : YZ sweep

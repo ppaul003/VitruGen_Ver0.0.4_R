@@ -1,5 +1,6 @@
 #include "DiagnosticIdle.h"
 #include "renderer_Euclid.h"
+#include "TheArbiter.h"
 
 #include <cmath>
 #include <algorithm>
@@ -10,7 +11,11 @@ using namespace glm;
 bool DiagnosticIdle::initialize(
 	WorkspaceServices& services) {
 
-	return services.renderer != nullptr;
+	m_arbiter = services.arbiter;
+
+	return
+		services.renderer != nullptr &&
+		m_arbiter != nullptr;
 }
 
 void DiagnosticIdle::enter(WorkspaceServices& services) {
@@ -53,22 +58,141 @@ DiagnosticIdle::buildPresentation() const {
 
 	presentation.panelVisible = true;
 
+	// ---------------------------------------------------------
+	// DiagnosticIdle remains inserted while Layer-1 cartridges
+	// are intentionally outside this sprint.  The structural
+	// transition is still recorded by TheArbiter, and this small
+	// fallback makes that boundary explicit without implementing
+	// any domain workspace behavior.
+	// ---------------------------------------------------------
+	if (m_arbiter && !m_arbiter->isGlobalShell()) {
+
+		presentation.workspaceName =
+			std::string("LAYER 1 -> ") +
+			selectedEnvironmentName() +
+			" WORKSPACE CONFIGURATION";
+
+		presentation.statusLine =
+			std::string(selectedEnvironmentName()) +
+			" cartridge is not migrated.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Warning;
+
+		presentation.footerLine1 =
+			"Q: Back one layer";
+
+		presentation.footerLine2 =
+			"ESC: Exit";
+
+		return presentation;
+	}
+
 	presentation.workspaceName =
-		"VITRUGEN HOST DIAGNOSTIC";
+		"LAYER 0 -> MENU";
 
-	presentation.layerLabel =
-		"GLOBAL SHELL";
+	WorkspacePanelSection environmentSection;
 
-	presentation.subLayerLabel =
-		"DIAGNOSTIC IDLE";
+	WorkspacePanelRow environmentRow;
+	environmentRow.label =
+		"[1]: ENVIRONMENT SELECTION";
+	environmentRow.value =
+		selectedEnvironmentName();
+	environmentRow.selectable = true;
+	environmentRow.selected = true;
 
-	presentation.statusLine =
-		"WORKSPACE SOCKET ONLINE";
+	environmentSection.rows.push_back(
+		environmentRow
+	);
+
+	presentation.sections.push_back(
+		environmentSection
+	);
+
+	if (!m_arbiter ||
+		m_arbiter->getWorkspaceDomain() ==
+		TheArbiter::WorkspaceDomain::NONE) {
+
+		presentation.statusLine =
+			"IDLE selected: E is locked.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Warning;
+	}
+	else {
+
+		presentation.statusLine =
+			std::string(selectedEnvironmentName()) +
+			" selected: press E to configure.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Ready;
+	}
 
 	presentation.footerLine1 =
-		"VitruGen_Ver004_R";
+		"A / D: Change selection     E: Enter";
+
+	presentation.footerLine2 =
+		"ESC: Exit";
 
 	return presentation;
+}
+
+const char* DiagnosticIdle::selectedEnvironmentName() const {
+
+	if (!m_arbiter)
+		return "IDLE";
+
+	switch (m_arbiter->getWorkspaceDomain()) {
+	case TheArbiter::WorkspaceDomain::NONE:
+		return "IDLE";
+
+	case TheArbiter::WorkspaceDomain::GRID_2D:
+		return "GRID_2D";
+
+	case TheArbiter::WorkspaceDomain::GRID_3D:
+		return "GRID_3D";
+
+	case TheArbiter::WorkspaceDomain::SIMCAD_4D:
+		return "SIMCAD_4D";
+	}
+
+	return "IDLE";
+}
+
+void DiagnosticIdle::cycleEnvironment(int direction) {
+
+	if (!m_arbiter || direction == 0)
+		return;
+
+	using Domain = TheArbiter::WorkspaceDomain;
+
+	static constexpr Domain kEnvironmentOrder[] = {
+		Domain::NONE,
+		Domain::GRID_2D,
+		Domain::GRID_3D,
+		Domain::SIMCAD_4D
+	};
+
+	int currentIndex = 0;
+
+	for (int index = 0; index < 4; ++index) {
+
+		if (kEnvironmentOrder[index] ==
+			m_arbiter->getWorkspaceDomain()) {
+
+			currentIndex = index;
+			break;
+		}
+	}
+
+	const int step = direction < 0 ? -1 : 1;
+	const int nextIndex =
+		(currentIndex + step + 4) % 4;
+
+	m_arbiter->setWorkspaceDomain(
+		kEnvironmentOrder[nextIndex]
+	);
 }
 
 void DiagnosticIdle::render(
@@ -178,6 +302,61 @@ void DiagnosticIdle::render(
 bool DiagnosticIdle::handleInput(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
+
+	if (!m_arbiter)
+		m_arbiter = services.arbiter;
+
+	if (!m_arbiter)
+		return false;
+
+	// ---------------------------------------------------------
+	// The root cartridge supplies Layer-0 meaning for the
+	// generic actions translated by TheArbiter.
+	// ---------------------------------------------------------
+	if (m_arbiter->isGlobalShell()) {
+
+		switch (input.action) {
+		case WorkspaceInputAction::Decrease:
+			cycleEnvironment(-1);
+			return true;
+
+		case WorkspaceInputAction::Increase:
+			cycleEnvironment(+1);
+			return true;
+
+		case WorkspaceInputAction::Activate:
+			// GOLD keeps E locked while IDLE is selected.
+			if (m_arbiter->getWorkspaceDomain() !=
+				TheArbiter::WorkspaceDomain::NONE) {
+
+				m_arbiter->setApplicationLayer(
+					TheArbiter::ApplicationLayer::DOMAIN_SELECTION
+				);
+			}
+
+			return true;
+
+		case WorkspaceInputAction::Back:
+			// GOLD treats Back at the root as a handled no-op.
+			return true;
+
+		default:
+			return false;
+		}
+	}
+
+	// No domain cartridge is migrated yet.  Permit only the
+	// structural return to Layer 0 while DiagnosticIdle remains
+	// the active fallback cartridge.
+	if (m_arbiter->isDomainSelection() &&
+		input.action == WorkspaceInputAction::Back) {
+
+		m_arbiter->setApplicationLayer(
+			TheArbiter::ApplicationLayer::GLOBAL_SHELL
+		);
+
+		return true;
+	}
 
 	return false;
 }

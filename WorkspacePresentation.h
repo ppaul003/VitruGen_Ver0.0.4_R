@@ -4,6 +4,13 @@
 #include <string>
 #include <vector>
 
+enum class WorkspaceStatusTone {
+
+	Neutral = 0,
+	Ready,
+	Warning
+};
+
 struct WorkspacePanelRow {
 
 	std::string label;
@@ -31,6 +38,8 @@ struct WorkspacePresentation {
 	std::string subLayerLabel;
 
 	std::string statusLine;
+	WorkspaceStatusTone statusTone =
+		WorkspaceStatusTone::Neutral;
 
 	std::vector<WorkspacePanelSection> sections;
 

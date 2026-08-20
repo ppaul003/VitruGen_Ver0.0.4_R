@@ -335,6 +335,8 @@ EuclidEngine::buildWorkspaceFrameContext(float deltaTime) const {
 }
 
 void EuclidEngine::initMenus() {
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
+
 	if (m_menuId != 0) {
 		
 		glutDestroyMenu(m_menuId);
@@ -345,16 +347,29 @@ void EuclidEngine::initMenus() {
 		glutCreateMenu(&EuclidEngine::sMainMenu);
 
 	glutAddMenuEntry(
-		"VitruGen Host Diagnostic",
+		"=========================================",
 		MENU_NOP
 	);
 
+	glutAddMenuEntry(
+		"- VitruGen Tesseract Behavioral Object -",
+		MENU_NOP
+	);
 
 	glutAddMenuEntry(
-		"Quit",
+		"=========================================",
+		MENU_NOP
+	);
+
+	glutAddMenuEntry(
+		"* Quit (esc)",
 		MENU_QUIT
 	);
 
+	glutAddMenuEntry(
+		"=========================================",
+		MENU_NOP
+	);
 
 	glutAttachMenu(
 		GLUT_RIGHT_BUTTON
@@ -474,12 +489,16 @@ void EuclidEngine::sPassiveMotion(int x, int y) {
 void EuclidEngine::sMainMenu(int value) {
 
 	if (!s_instance) return;
+	if (value == MENU_NOP) return;
 
-
-	if (value == MENU_QUIT) {
-
-		s_instance->requestExit();
-	}
+	// Feed menu commands through the same raw-to-generic path
+	// used by the keyboard.  Layer 0 currently exposes only the
+	// host-generic ESC/Quit command.
+	s_instance->onKeyboard(
+		static_cast<unsigned char>(value),
+		0,
+		0
+	);
 }
 
 void EuclidEngine::sMenuStatus(int status, int x, int y) {
