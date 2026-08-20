@@ -1,0 +1,106 @@
+# ============================================================
+# Visual Studio workspace and user state
+# ============================================================
+
+.vs/
+**/.vs/
+
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.opendb
+
+
+# ============================================================
+# Visual Studio / CUDA build directories
+# ============================================================
+
+x64/
+**/x64/
+
+Debug/
+Release/
+
+**/Debug/
+**/Release/
+
+
+# ============================================================
+# C / C++ compiler and linker artifacts
+# ============================================================
+
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.iobj
+*.ipdb
+*.exp
+*.recipe
+*.tlog
+*.lastbuildstate
+*.cache
+
+
+# ============================================================
+# Generated binaries
+# ============================================================
+
+*.exe
+*.dll
+
+
+# ============================================================
+# Temporary / diagnostic files
+# ============================================================
+
+*.tmp
+*.log
+
+Thumbs.db
+Desktop.ini
+~$*
+
+
+# ============================================================
+# VitruGen generated workspace data
+# ============================================================
+
+/SINGLE_PARTICLE_DATA/
+
+
+# ============================================================
+# VitruGen local third-party compatibility assets
+#
+# Do not publish imported copyrighted meshes, materials,
+# textures, or accompanying third-party source material.
+# ============================================================
+
+/INPUTS/MasterChief/**
+
+
+# ============================================================
+# Generated VitruGen asset bundles
+# ============================================================
+
+/OUTPUT/**
+
+# Preserve public OUTPUT directory contract.
+!/OUTPUT/.gitkeep
+!/OUTPUT/README.md
+
+
+# ============================================================
+# Local development / experimental directories
+# ============================================================
+
+/VitruGen_ver004_rev_a/
+/VitruGen_TEST/
+
+
+# ============================================================
+# Aider local state
+# ============================================================
+
+.aider*

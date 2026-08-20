@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8D13A81D-EA84-48D6-9106-C7363BEFC08B}</ProjectGuid>
+    <RootNamespace>VitruGen_ver004</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\richa\cuda-samples-master\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>cudart_static.lib;windowscodecs.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\richa\cuda-samples-master\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>cudart_static.lib;windowscodecs.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AssetPathResolver.cpp" />
+    <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="DiagnosticIdle.cpp" />
+    <ClCompile Include="EuclidEngine.cpp" />
+    <ClCompile Include="JsonValue.cpp" />
+    <ClCompile Include="marchingCubes.cpp" />
+    <ClCompile Include="MeshGeometry.cpp" />
+    <ClCompile Include="MeshProcessor.cpp" />
+    <ClCompile Include="MeshUVGenerator.cpp" />
+    <ClCompile Include="ObjMtlImporter.cpp" />
+    <ClCompile Include="particleSystem.cpp" />
+    <ClCompile Include="PngImage.cpp" />
+    <ClCompile Include="ProjectAssetRepository.cpp" />
+    <ClCompile Include="renderer_Euclid.cpp" />
+    <ClCompile Include="StaticParticleAsset.cpp" />
+    <ClCompile Include="StaticParticleAssetIO.cpp" />
+    <ClCompile Include="TextEntry.cpp" />
+    <ClCompile Include="TheArbiter.cpp" />
+    <ClCompile Include="TheTesseract.cpp" />
+    <ClCompile Include="ViewPort.cpp" />
+    <ClCompile Include="VitruGen_ver004.cpp" />
+    <ClCompile Include="VspaManifest.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="freeglut.dll" />
+    <None Include="glew64.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="freeglut.lib" />
+    <Library Include="glew64.lib" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AssetPathResolver.h" />
+    <ClInclude Include="Camera.h" />
+    <ClInclude Include="DiagnosticIdle.h" />
+    <ClInclude Include="EuclidEngine.h" />
+    <ClInclude Include="Interactions.h" />
+    <ClInclude Include="IWorkspace.h" />
+    <ClInclude Include="JsonValue.h" />
+    <ClInclude Include="kernel.h" />
+    <ClInclude Include="kernel_impl.cuh" />
+    <ClInclude Include="marchingCubes.h" />
+    <ClInclude Include="MeshGeometry.h" />
+    <ClInclude Include="MeshProcessor.h" />
+    <ClInclude Include="MeshUVGenerator.h" />
+    <ClInclude Include="ObjMtlImporter.h" />
+    <ClInclude Include="params_kernel.cuh" />
+    <ClInclude Include="particleSystem.h" />
+    <ClInclude Include="PngImage.h" />
+    <ClInclude Include="ProjectAssetRepository.h" />
+    <ClInclude Include="renderer_Euclid.h" />
+    <ClInclude Include="render_utils.h" />
+    <ClInclude Include="StaticParticleAsset.h" />
+    <ClInclude Include="StaticParticleAssetIO.h" />
+    <ClInclude Include="tables.h" />
+    <ClInclude Include="TextEntry.h" />
+    <ClInclude Include="TheArbiter.h" />
+    <ClInclude Include="TheTesseract.h" />
+    <ClInclude Include="ViewPort.h" />
+    <ClInclude Include="VspaManifest.h" />
+    <ClInclude Include="WorkspaceContext.h" />
+    <ClInclude Include="WorkspaceInput.h" />
+    <ClInclude Include="WorkspacePresentation.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="VitruGen_Ver004.ico" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.targets" />
+  </ImportGroup>
+</Project>
