@@ -161,8 +161,8 @@ protected:
 private:
 	static constexpr float kSimBoxSize = 4.0f;
 	static constexpr float kSimHalfBox = kSimBoxSize * 0.5f;
-	static constexpr int kMajorEvery = 4;
-	static constexpr int kGridDim = 16;
+	static constexpr int kMajorEvery = 8;
+	static constexpr int kGridDim = 64;
 	static constexpr float kCellSize =
 		kSimBoxSize / static_cast<float>(kGridDim);
 

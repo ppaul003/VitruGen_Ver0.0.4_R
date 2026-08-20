@@ -1,6 +1,10 @@
 #include "DiagnosticIdle.h"
 #include "renderer_Euclid.h"
 
+#include <cmath>
+#include <algorithm>
+
+using namespace std;
 using namespace glm;
 
 bool DiagnosticIdle::initialize(
@@ -9,14 +13,9 @@ bool DiagnosticIdle::initialize(
 	return services.renderer != nullptr;
 }
 
-void DiagnosticIdle::enter(
-	WorkspaceServices& services) {
+void DiagnosticIdle::enter(WorkspaceServices& services) {
 
-	m_rotation = 0.0f;
-
-	m_sliceXY = -1.0f;
-	m_sliceXZ = -1.0f;
-	m_sliceYZ = -1.0f;
+	m_sliceCycle = 0.0f;
 }
 
 void DiagnosticIdle::exit(
@@ -27,25 +26,24 @@ void DiagnosticIdle::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	constexpr float sliceSpeed = 0.50f;
+	// ---------------------------------------------------------
+	// GOLD Ver004 idle slice animation:
+	//
+	//     0 -> 1 : XY
+	//     1 -> 2 : XZ
+	//     2 -> 3 : YZ
+	//
+	// 0.35 cycle units / second.
+	//
+	// Full XYZ sequence:
+	//     3 / 0.35 ~= 8.57 seconds
+	// ---------------------------------------------------------
+	m_sliceCycle = fmod(frame.elapsedTime * 0.35f, 3.0f);
 
-	m_rotation +=
-		30.0f * frame.deltaTime;
+	if (m_sliceCycle < 0.0f) {
 
-	m_sliceXY += sliceSpeed * frame.deltaTime;
-	m_sliceXZ += sliceSpeed * frame.deltaTime;
-	m_sliceYZ += sliceSpeed * frame.deltaTime;
-
-	// Temporary diagnostic bounds.
-	// We can derive these from the grid later.
-	if (m_sliceXY > 2.0f)
-		m_sliceXY = -2.0f;
-
-	if (m_sliceXZ > 2.0f)
-		m_sliceXZ = -2.0f;
-
-	if (m_sliceYZ > 2.0f)
-		m_sliceYZ = -2.0f;
+		m_sliceCycle += 3.0f;
+	}
 }
 
 WorkspacePresentation
@@ -83,24 +81,27 @@ void DiagnosticIdle::render(
 	EuclidRenderer& renderer = *services.renderer;
 
 	EuclidRenderer::UniformGrid grid;
-	float gridDim = renderer.getGridDimSize();
+
+	constexpr int kIdleGridDim = 64;
+	constexpr int kIdleMajorEvery = 8;
+
+	const float boxSize = renderer.getSimBoxSize();
+	const float halfBox = boxSize * 0.5f;
 
 	grid.dimensions =
-		ivec3(gridDim, gridDim, gridDim);
-
-	float halfBox =
-		renderer.getSimBoxSize() * 0.5f;
+		ivec3(
+			kIdleGridDim, 
+			kIdleGridDim, 
+			kIdleGridDim
+		);
 
 	grid.origin = vec3(-halfBox);
 
-	float cellSize =
-		renderer.getSimBoxSize() /
-		static_cast<float>(gridDim);
+	float cellSize = boxSize / 
+		static_cast<float>(kIdleGridDim);
 
 	grid.cellSize = vec3(cellSize);
-
-	grid.majorEvery =
-		renderer.getGridMajorEvery();
+	grid.majorEvery = kIdleMajorEvery;
 
 	EuclidRenderer::GridDisplay display;
 	display.boundary = true;
@@ -110,26 +111,67 @@ void DiagnosticIdle::render(
 
 	renderer.drawUniformGrid(grid, display);
 
-	// Animated diagnostic slices
-	renderer.drawGridPlane(
-		grid,
-		EuclidRenderer::GridPlane::PLANE_XY,
-		m_sliceXY,
-		true
-	);
+	const int segment =
+		std::min(2, static_cast<int>(m_sliceCycle));
+
+	const float local = m_sliceCycle -
+		static_cast<float>(segment);
+
+	// ---------------------------------------------------------
+	// GOLD moves by logical grid slices, not arbitrary floating
+	// world distance.
+	//
+	// 64 cells:
+	//     offset range = -32 ... +32
+	// ---------------------------------------------------------
+	const int halfSlice = kIdleGridDim / 2;
+
+	const int sliceOffset =
+		static_cast<int>(round(-halfSlice +
+			local * static_cast<float>(halfSlice * 2)));
+
+	const int sliceIndex =
+		std::clamp(halfSlice + sliceOffset, 0, kIdleGridDim);
+
+	EuclidRenderer::GridPlane plane =
+		EuclidRenderer::GridPlane::PLANE_XY;
+
+	float planePosition = 0.0f;
+
+	switch (segment) {
+	case 0:
+		// XY plane moves through Z
+		plane = EuclidRenderer::GridPlane::PLANE_XY;
+
+		planePosition = grid.origin.z +
+			static_cast<float>(sliceIndex) * grid.cellSize.z;
+
+		break;
+
+	case 1:
+		// XZ plane moves through Y
+		plane = EuclidRenderer::GridPlane::PLANE_XZ;
+
+		planePosition = grid.origin.y +
+			static_cast<float>(sliceIndex) * grid.cellSize.y;
+
+		break;
+
+	default:
+		// YZ plane moves through X
+		plane = EuclidRenderer::GridPlane::PLANE_YZ;
+
+		planePosition = grid.origin.x +
+			static_cast<float>(sliceIndex) * grid.cellSize.x;
+
+		break;
+	}
 
 	renderer.drawGridPlane(
-		grid,
-		EuclidRenderer::GridPlane::PLANE_XZ,
-		m_sliceXZ,
-		true
-	);
-
-	renderer.drawGridPlane(
-		grid,
-		EuclidRenderer::GridPlane::PLANE_YZ,
-		m_sliceYZ,
-		true
+		grid, 
+		plane, 
+		planePosition, 
+		false
 	);
 }
 

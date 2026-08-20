@@ -8,6 +8,10 @@ class ViewPort;
 struct WorkspaceFrameContext {
 	
 	float deltaTime = 0.0f;
+	
+	// Monotonic application time supplied by the host.
+	// Workspaces can use this for deterministic animation.
+	float elapsedTime = 0.0f;
 
 	int viewportWidth = 1920;
 	int viewportHeight = 1080;

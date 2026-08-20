@@ -32,11 +32,10 @@ public:
 		buildPresentation() const override;
 
 private:
-	float m_rotation = 0.0f;
-
-	float m_sliceXY = -1.0f;
-	float m_sliceXZ = -1.0f;
-	float m_sliceYZ = -1.0f;
+	// 0.0 -> 1.0 : XY sweep
+	// 1.0 -> 2.0 : XZ sweep
+	// 2.0 -> 3.0 : YZ sweep
+	float m_sliceCycle = 0.0f;
 };
 
 #endif

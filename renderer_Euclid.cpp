@@ -98,8 +98,8 @@ void EuclidRenderer::drawGridBoundary(const UniformGrid& grid) {
         GL_ONE_MINUS_SRC_ALPHA
     );
 
-    glLineWidth(1.5f);
-    glColor4f(1.0f, 1.0f, 1.0f, 0.55f);
+    glLineWidth(2.0f);
+    glColor4f(1.0f, 1.0f, 1.0f, 0.35f);
 
     glBegin(GL_LINES);
 
@@ -207,9 +207,11 @@ void EuclidRenderer::drawGridPlaneLines(
     const vec3 max = grid.origin +
         vec3(grid.dimensions) * grid.cellSize;
 
+    const int majorEvery =
+        std::max(1, grid.majorEvery);
+
     glUseProgram(0);
     glDisable(GL_TEXTURE_2D);
-
     glEnable(GL_BLEND);
 
     glBlendFunc(
@@ -217,55 +219,24 @@ void EuclidRenderer::drawGridPlaneLines(
         GL_ONE_MINUS_SRC_ALPHA
     );
 
-    glLineWidth(1.0f);
-    glBegin(GL_LINES);
+    // =========================================================
+    // GOLD DIAGNOSTIC SLICE OUTER BORDER
+    // =========================================================
+    glLineWidth(3.0f);
+    glColor4f(1.0f, 1.0f, 1.0f, 0.90f);
+
+    glBegin(GL_LINE_LOOP);
 
     switch (plane) {
     // --------------------------------
     // XY — constant Z
     // --------------------------------
     case GridPlane::PLANE_XY:
-        for (int x = 0; x <= grid.dimensions.x; x++) {
-
-            const bool major =
-                x % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float px = min.x +
-                x * grid.cellSize.x;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(px, min.y, planePosition);
-            glVertex3f(px, max.y, planePosition);
-        }
-
-        for (int y = 0; y <= grid.dimensions.y; y++) {
-
-            const bool major =
-                y % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float py = min.y +
-                y * grid.cellSize.y;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(min.x, py, planePosition);
-            glVertex3f(max.x, py, planePosition);
-        }
+        
+        glVertex3f(min.x, min.y, planePosition);
+        glVertex3f(max.x, min.y, planePosition);
+        glVertex3f(max.x, max.y, planePosition);
+        glVertex3f(min.x, max.y, planePosition);
 
         break;
 
@@ -273,47 +244,11 @@ void EuclidRenderer::drawGridPlaneLines(
     // XZ — constant Y
     // --------------------------------
     case GridPlane::PLANE_XZ:
-        for (int x = 0; x <= grid.dimensions.x; x++) {
-
-            const bool major =
-                x % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float px = min.x +
-                x * grid.cellSize.x;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(px, planePosition, min.z);
-            glVertex3f(px, planePosition, max.z);
-        }
-
-        for (int z = 0; z <= grid.dimensions.z; z++) {
-
-            const bool major =
-                z % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float pz = min.z +
-                z * grid.cellSize.z;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(min.x, planePosition, pz);
-            glVertex3f(max.x, planePosition, pz);
-        }
+        
+        glVertex3f(min.x, planePosition, min.z);
+        glVertex3f(max.x, planePosition, min.z);
+        glVertex3f(max.x, planePosition, max.z);
+        glVertex3f(min.x, planePosition, max.z);
 
         break;
 
@@ -321,53 +256,245 @@ void EuclidRenderer::drawGridPlaneLines(
     // YZ — constant X
     // --------------------------------
     case GridPlane::PLANE_YZ:
-        for (int y = 0; y <= grid.dimensions.y; y++) {
-
-            const bool major =
-                y % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float py = min.y +
-                y * grid.cellSize.y;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(planePosition, py, min.z);
-            glVertex3f(planePosition, py, max.z);
-        }
-
-        for (int z = 0; z <= grid.dimensions.z; z++) {
-
-            const bool major =
-                z % grid.majorEvery == 0;
-
-            if (!major && !drawMinorLines)
-                continue;
-
-            const float pz = min.z +
-                z * grid.cellSize.z;
-
-            if (major)
-                glColor4f(1.0f, 1.0f, 1.0f, 0.32f);
-
-            else
-                glColor4f(1.0f, 1.0f, 1.0f, 0.10f);
-
-            glVertex3f(planePosition, min.y, pz);
-            glVertex3f(planePosition, max.y, pz);
-        }
+        
+        glVertex3f(planePosition, min.y, min.z);
+        glVertex3f(planePosition, max.y, min.z);
+        glVertex3f(planePosition, max.y, max.z);
+        glVertex3f(planePosition, min.y, max.z);
 
         break;
 
     }
 
     glEnd();
+
+    // =========================================================
+    // GOLD DIAGNOSTIC SLICE MAJOR GRID
+    //
+    // Always visible.
+    // =========================================================
+    glLineWidth(2.0f);
+    glColor4f(1.0f, 1.0f, 1.0f, 0.35f);
+
+    glBegin(GL_LINES);
+    switch (plane) {
+
+    // ---------------------------------------------------------
+    // XY — constant Z
+    // ---------------------------------------------------------
+    case GridPlane::PLANE_XY:
+
+        // Y-parallel lines at major X positions.
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+            if ((xIdx % majorEvery) != 0)
+                continue;
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            glVertex3f(x, min.y, planePosition);
+            glVertex3f(x, max.y, planePosition);
+        }
+
+        // X-parallel lines at major Y positions.
+        for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+            if ((yIdx % majorEvery) != 0)
+                continue;
+
+            const float y = min.y +
+                static_cast<float>(yIdx) * grid.cellSize.y;
+
+            glVertex3f(min.x, y, planePosition);
+            glVertex3f(max.x, y, planePosition);
+        }
+
+        break;
+
+    // ---------------------------------------------------------
+    // XZ — constant Y
+    // ---------------------------------------------------------
+    case GridPlane::PLANE_XZ:
+
+        // Z-parallel lines at major X positions.
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+            if ((xIdx % majorEvery) != 0)
+                continue;
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            glVertex3f(x, planePosition, min.z);
+            glVertex3f(x, planePosition, max.z);
+        }
+
+
+        // X-parallel lines at major Z positions.
+        for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+            if ((zIdx % majorEvery) != 0)
+                continue;
+
+            const float z = min.z +
+                static_cast<float>(zIdx) * grid.cellSize.z;
+
+            glVertex3f(min.x, planePosition, z);
+            glVertex3f(max.x, planePosition, z);
+        }
+
+        break;
+
+    // ---------------------------------------------------------
+    // YZ — constant X
+    // ---------------------------------------------------------
+    case GridPlane::PLANE_YZ:
+
+        // Z-parallel lines at major Y positions.
+        for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+            if ((yIdx % majorEvery) != 0)
+                continue;
+
+            const float y = min.y +
+                static_cast<float>(yIdx) * grid.cellSize.y;
+
+            glVertex3f(planePosition, y, min.z);
+            glVertex3f(planePosition, y, max.z);
+        }
+
+
+        // Y-parallel lines at major Z positions.
+        for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+            if ((zIdx % majorEvery) != 0)
+                continue;
+
+            const float z = min.z +
+                static_cast<float>(zIdx) * grid.cellSize.z;
+
+            glVertex3f(planePosition, min.y, z);
+            glVertex3f(planePosition, max.y, z);
+        }
+
+        break;
+    }
+
+    glEnd();
+
+    // =========================================================
+    // OPTIONAL MINOR GRID
+    //
+    // GOLD:
+    //     width = 1.0
+    //     alpha = 0.08
+    //
+    // Layer-0 currently passes false, so these will normally
+    // remain disabled during the idle diagnostic.
+    // =========================================================
+    if (drawMinorLines) {
+
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.08f);
+        glBegin(GL_LINES);
+
+        switch (plane) {
+
+        case GridPlane::PLANE_XY:
+
+            for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+                if ((xIdx % majorEvery) == 0)
+                    continue;
+
+                const float x = min.x +
+                    static_cast<float>(xIdx) * grid.cellSize.x;
+
+                glVertex3f(x, min.y, planePosition);
+                glVertex3f(x, max.y, planePosition);
+            }
+
+            for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+                if ((yIdx % majorEvery) == 0)
+                    continue;
+
+
+                const float y = min.y +
+                    static_cast<float>(yIdx) * grid.cellSize.y;
+
+
+                glVertex3f(min.x, y, planePosition);
+                glVertex3f(max.x, y, planePosition);
+            }
+
+            break;
+
+
+        case GridPlane::PLANE_XZ:
+
+            for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+                if ((xIdx % majorEvery) == 0)
+                    continue;
+
+
+                const float x = min.x +
+                    static_cast<float>(xIdx) * grid.cellSize.x;
+
+
+                glVertex3f(x, planePosition, min.z);
+                glVertex3f(x, planePosition, max.z);
+            }
+
+
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+                if ((zIdx % majorEvery) == 0)
+                    continue;
+
+
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+
+                glVertex3f(
+                    min.x,
+                    planePosition,
+                    z
+                );
+
+                glVertex3f(
+                    max.x,
+                    planePosition,
+                    z
+                );
+            }
+
+            break;
+
+
+        case GridPlane::PLANE_YZ:
+
+            for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+                if ((yIdx % majorEvery) == 0)
+                    continue;
+
+                const float y = min.y +
+                    static_cast<float>(yIdx) * grid.cellSize.y;
+
+                glVertex3f(planePosition, y, min.z);
+                glVertex3f(planePosition, y, max.z);
+            }
+
+
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+                if ((zIdx % majorEvery) == 0)
+                    continue;
+
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+                glVertex3f(planePosition, min.y, z);
+                glVertex3f(planePosition, max.y, z);
+            }
+
+            break;
+        }
+
+        glEnd();
+    }
 
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
@@ -377,42 +504,201 @@ void EuclidRenderer::drawUniformGrid(
     const UniformGrid& grid,
     const GridDisplay& display) {
 
+    // ---------------------------------------------------------
+    // Validate grid.
+    // ---------------------------------------------------------
+    if (grid.dimensions.x <= 0 ||
+        grid.dimensions.y <= 0 ||
+        grid.dimensions.z <= 0) return;
+
+    const vec3 min = grid.origin;
+
+    const vec3 max = grid.origin +
+        vec3(grid.dimensions) * grid.cellSize;
+
+    const int majorEvery =
+        std::max(1, grid.majorEvery);
+
+    // ---------------------------------------------------------
+    // Outer workspace boundary.
+    // ---------------------------------------------------------
     if (display.boundary)
         drawGridBoundary(grid);
 
+    // ---------------------------------------------------------
+    // World-reference axes.
+    // ---------------------------------------------------------
     if (display.axes)
         drawGridAxes(grid);
 
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+
+    glBlendFunc(
+        GL_SRC_ALPHA,
+        GL_ONE_MINUS_SRC_ALPHA
+    );
+
+    // =========================================================
+    // MAJOR 3D LATTICE
+    //
+    // at every major-grid intersection.
+    //
+    // This creates a true sparse 3D volume instead of three
+    // intersecting center planes.
+    // =========================================================
     if (display.majorGrid) {
 
-        const vec3 min = grid.origin;
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.12f);
 
-        const vec3 max = grid.origin +
-            vec3(grid.dimensions) * grid.cellSize;
+        glBegin(GL_LINES);
 
-        const vec3 center = 0.5f * (min + max);
+        // -----------------------------------------------------
+        // X-parallel lines.
+        //
+        // Sweep major Y and Z intersections.
+        // -----------------------------------------------------
+        for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+            if ((yIdx % majorEvery) != 0)
+                continue;
 
-        drawGridPlane(
-            grid,
-            GridPlane::PLANE_XY,
-            center.z,
-            display.minorGrid
-        );
+            const float y = min.y +
+                static_cast<float>(yIdx) * grid.cellSize.y;
 
-        drawGridPlane(
-            grid,
-            GridPlane::PLANE_XZ,
-            center.y,
-            display.minorGrid
-        );
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+                if ((zIdx % majorEvery) != 0)
+                    continue;
 
-        drawGridPlane(
-            grid,
-            GridPlane::PLANE_YZ,
-            center.x,
-            display.minorGrid
-        );
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+                glVertex3f(min.x, y, z);
+                glVertex3f(max.x, y, z);
+
+            }
+        }
+
+        // -----------------------------------------------------
+        // Y-parallel lines.
+        //
+        // Sweep major X and Z intersections.
+        // -----------------------------------------------------
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+            if ((xIdx % majorEvery) != 0)
+                continue;
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+                if ((zIdx % majorEvery) != 0)
+                    continue;
+
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+                glVertex3f(x, min.y, z);
+                glVertex3f(x, max.y, z);
+            }
+        }
+
+        // -----------------------------------------------------
+        // Z-parallel lines.
+        //
+        // Sweep major X and Y intersections.
+        // -----------------------------------------------------
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+            if ((xIdx % majorEvery) != 0)
+                continue;
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+                if ((yIdx % majorEvery) != 0)
+                    continue;
+
+                const float y = min.y +
+                    static_cast<float>(yIdx) * grid.cellSize.y;
+
+                glVertex3f(x, y, min.z);
+                glVertex3f(x, y, max.z);
+            }
+        }
+
+        glEnd();
     }
+
+    // =========================================================
+    // OPTIONAL MINOR 3D LATTICE
+    //
+    // Normally disabled in Layer-0 idle mode.
+    //
+    // Kept generic because future workspaces may request the
+    // complete collision-cell lattice.
+    // =========================================================
+    if (display.minorGrid) {
+
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.04f);
+
+        glBegin(GL_LINES);
+
+        // X-parallel dense lines.
+        for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+
+            const float y = min.y +
+                static_cast<float>(yIdx) * grid.cellSize.y;
+
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+                glVertex3f(min.x ,y, z);
+                glVertex3f(max.x, y, z);
+            }
+        }
+
+        // Y-parallel dense lines.
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; zIdx++) {
+
+                const float z = min.z +
+                    static_cast<float>(zIdx) * grid.cellSize.z;
+
+                glVertex3f(x, min.y, z);
+                glVertex3f(x, max.y, z);
+            }
+        }
+
+        // Z-parallel dense lines.
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; xIdx++) {
+
+            const float x = min.x +
+                static_cast<float>(xIdx) * grid.cellSize.x;
+
+            for (int yIdx = 0; yIdx <= grid.dimensions.y; yIdx++) {
+
+                const float y = min.y +
+                    static_cast<float>(yIdx) * grid.cellSize.y;
+
+                glVertex3f(x, y, min.z);
+                glVertex3f(x, y, max.z);
+            }
+        }
+
+        glEnd();
+    }
+
+    glLineWidth(1.0f);
+    glDisable(GL_BLEND);
 }
 
 void EuclidRenderer::drawWireCube(

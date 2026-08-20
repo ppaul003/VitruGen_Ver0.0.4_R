@@ -265,8 +265,8 @@ void EuclidEngine::initRenderer() {
 	m_renderer->setFOV(60.0f);
 
 	m_renderer->setSimBoxSize(4);
-	m_renderer->setGridDimSize(16);
-	m_renderer->setGridMajorEvery(4);
+	m_renderer->setGridDimSize(64);
+	m_renderer->setGridMajorEvery(8);
 
 	printf(
 		"[EuclidEngine] EuclidRenderer initialized.\n"
@@ -318,6 +318,9 @@ EuclidEngine::buildWorkspaceFrameContext(float deltaTime) const {
 
 	WorkspaceFrameContext frame;
 	frame.deltaTime = deltaTime;
+
+	frame.elapsedTime =
+		static_cast<float>(glutGet(GLUT_ELAPSED_TIME)) * 0.001f;
 
 	frame.viewportWidth = m_viewport.getWidth();
 	frame.viewportHeight = m_viewport.getHeight();
@@ -542,19 +545,33 @@ void EuclidEngine::onDisplay() {
 	// This is deliberately simple.
 	// We can wire CameraProcessor after HOST POST succeeds.
 	// ---------------------------------------------------------
-	glMatrixMode(GL_MODELVIEW);
+	const WorkspaceFrameContext frame =
+		buildWorkspaceFrameContext(0.0f);
 
+	const float previewRotation = frame.elapsedTime * 25.0f;
+
+	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	glTranslatef(0.0f, 0.0f, -7.0f);
-	glRotatef(18.0f, 1.0f, 0.0f, 0.0f);
-	glRotatef(28.0f, 0.0f, 1.0f, 0.0f);
+
+	// ---------------------------------------------------------
+	// GOLD Layer-0 menu camera behavior.
+	//
+	// GOLD:
+	//     X translation = +1.65
+	//     Z translation = -8.0
+	//     pitch         = 18 degrees
+	//     yaw           = previewRotation
+	//
+	// CameraProcessor already contains this behavior.
+	// ---------------------------------------------------------
+	m_camera.setBehaviorMode(CameraProcessor::CAM_MENU_PREVIEW);
+
+	m_camera.updateLag();
+	m_camera.applyMenuCameraTransform(previewRotation);
 
 	// ---------------------------------------------------------
 	// Render active cartridge.
 	// ---------------------------------------------------------
-	const WorkspaceFrameContext frame =
-		buildWorkspaceFrameContext(0.0f);
-
 	m_tesseract.render(frame);
 
 	// ---------------------------------------------------------
@@ -568,19 +585,12 @@ void EuclidEngine::onDisplay() {
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
 	
 	const TheArbiter::ArbiterResult result =
-		m_arbiter.routeMouseButton(
-			button,
-			state,
-			x,
-			y
-		);
-
+		m_arbiter.routeMouseButton(button, state, x, y);
 
 	if (result.hasWorkspaceInput) {
 
 		m_tesseract.handleInput(result.workspaceInput);
 	}
-
 
 	if (result.requestRedraw) {
 
