@@ -16,6 +16,7 @@
 #include "renderer_Euclid.h"
 
 #include "DiagnosticIdle.h"
+#include "ParticleSimWorkspace.h"
 
 struct cudaGraphicsResource;
 
@@ -35,6 +36,7 @@ private:
 	WorkspaceServices m_services;
 
 	DiagnosticIdle m_diagnosticIdle;
+	ParticleSimWorkspace m_particleSimWorkspace;
 
 	IWorkspace* m_activeWorkspace = nullptr;
 };

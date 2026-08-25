@@ -94,6 +94,7 @@
     <ClCompile Include="MeshProcessor.cpp" />
     <ClCompile Include="MeshUVGenerator.cpp" />
     <ClCompile Include="ObjMtlImporter.cpp" />
+    <ClCompile Include="ParticleSimWorkspace.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="PngImage.cpp" />
     <ClCompile Include="ProjectAssetRepository.cpp" />
@@ -131,6 +132,7 @@
     <ClInclude Include="MeshUVGenerator.h" />
     <ClInclude Include="ObjMtlImporter.h" />
     <ClInclude Include="params_kernel.cuh" />
+    <ClInclude Include="ParticleSimWorkspace.h" />
     <ClInclude Include="particleSystem.h" />
     <ClInclude Include="PngImage.h" />
     <ClInclude Include="ProjectAssetRepository.h" />

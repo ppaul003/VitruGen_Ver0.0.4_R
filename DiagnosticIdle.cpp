@@ -10,16 +10,16 @@ using namespace glm;
 
 bool DiagnosticIdle::initialize(
 	WorkspaceServices& services) {
-
+	
 	m_arbiter = services.arbiter;
-
+	
 	return
 		services.renderer != nullptr &&
 		m_arbiter != nullptr;
 }
 
 void DiagnosticIdle::enter(WorkspaceServices& services) {
-
+	
 	m_sliceCycle = 0.0f;
 }
 
@@ -30,7 +30,6 @@ void DiagnosticIdle::exit(
 void DiagnosticIdle::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
-
 	// ---------------------------------------------------------
 	// GOLD Ver004 idle slice animation:
 	//
@@ -44,9 +43,9 @@ void DiagnosticIdle::update(
 	//     3 / 0.35 ~= 8.57 seconds
 	// ---------------------------------------------------------
 	m_sliceCycle = fmod(frame.elapsedTime * 0.35f, 3.0f);
-
+	
 	if (m_sliceCycle < 0.0f) {
-
+	
 		m_sliceCycle += 3.0f;
 	}
 }
@@ -214,14 +213,14 @@ void DiagnosticIdle::render(
 
 	grid.dimensions =
 		ivec3(
-			kIdleGridDim, 
-			kIdleGridDim, 
+			kIdleGridDim,
+			kIdleGridDim,
 			kIdleGridDim
 		);
 
 	grid.origin = vec3(-halfBox);
 
-	float cellSize = boxSize / 
+	float cellSize = boxSize /
 		static_cast<float>(kIdleGridDim);
 
 	grid.cellSize = vec3(cellSize);
@@ -292,9 +291,9 @@ void DiagnosticIdle::render(
 	}
 
 	renderer.drawGridPlane(
-		grid, 
-		plane, 
-		planePosition, 
+		grid,
+		plane,
+		planePosition,
 		false
 	);
 }

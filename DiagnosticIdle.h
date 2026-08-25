@@ -12,7 +12,6 @@ public:
 	bool initialize(WorkspaceServices& services) override;
 
 	void enter(WorkspaceServices& services) override;
-
 	void exit(WorkspaceServices& services) override;
 
 	void update(
