@@ -31,10 +31,10 @@
 #include "TheTesseract.h"
 
 #include "marchingCubes.h"
-#include "particleSystem.h"
 #include "renderer_Euclid.h"
 #include "StaticParticleAssetIO.h"
 #include "ProjectAssetRepository.h"
+#include "TextEntry.h"
 
 class EuclidEngine {
 public:
@@ -67,6 +67,16 @@ private:
 		None = 0, 
 		Save, 
 		Load 
+	};
+
+	enum class HostModalMode {
+		Hidden = 0,
+		LoadSelect,
+		SaveName,
+		SaveConfirm,
+		Working,
+		Complete,
+		Failed
 	};
 
 	struct StaticAssetAsyncResult {
@@ -119,6 +129,17 @@ private:
 	void onIdle();
 	void onClose();
 
+	void consumeWorkspaceHostRequest();
+	bool handleHostModalKeyboard(unsigned char rawKey);
+	WorkspacePresentation buildHostModalPresentation() const;
+	bool makeCurrentStaticParticleAsset(vitru::StaticParticleAsset& output) const;
+	void beginStaticParticleLoad();
+	void beginStaticParticleSave(bool saveAs);
+	void beginStaticParticleJob();
+	void advanceStaticParticleJob();
+	void exportCurrentSingleParticleObj();
+	void closeHostModal();
+
 	// HOST CONFIGURATION
 	static constexpr uint kWidth = 1920;
 	static constexpr uint kHeight = 1080;
@@ -126,6 +147,7 @@ private:
 	// HOST MENU COMMANDS
 	static constexpr int MENU_NOP = -1;
 	static constexpr int MENU_QUIT = 27;
+	static constexpr int MENU_WORKSPACE_COMMAND_BASE = 10000;
 
 	// TRANSITIONAL ASSET PERSISTENCE COMMANDS
 	static constexpr int MENU_EXPORT_OBJ = 1001;
@@ -139,6 +161,7 @@ private:
 	CameraProcessor m_camera;
 
 	// --- INPUT TRANSLATION ---
+	MouseInput m_mouse;
 	KeyboardInput m_keyboard;
 
 	// --- SHARED HOST SERVICES
@@ -150,16 +173,9 @@ private:
 	bool m_cleaned = false;
 
 	int m_menuId = 0;
-	
+	std::vector<int> m_workspaceMenuCommands;
+
 	// --- SAVE/LODAD/WRITE SP ASSET MEMBERS ---
-	ObjExportStage m_objExportStage = ObjExportStage::NONE;
-	
-	bool m_objExportFutureActive = false;
-	int m_objExportNextStepMs = 0;
-	int m_objExportLastSpinnerMs = 0;
-	int m_objExportCompleteUntilMs = 0;
-	
-	std::future<bool> m_objExportFuture;
 	std::string m_objExportPath = "SINGLE_PARTICLE_DATA/p0.obj";
 
 	StaticAssetJobKind m_staticAssetJobKind = StaticAssetJobKind::None;
@@ -168,8 +184,23 @@ private:
 	int m_staticAssetLastSpinnerMs = 0;
 	std::string m_pendingStaticAssetName;
 	std::vector<vitru::StaticAssetCatalogEntry> m_staticAssetCatalog;
+
+	std::future<bool> m_objExportFuture;
+	ObjExportStage m_objExportStage = ObjExportStage::NONE;
+
+	bool m_objExportFutureActive = false;
+	int m_objExportNextStepMs = 0;
+	int m_objExportLastSpinnerMs = 0;
+	int m_objExportCompleteUntilMs = 0;
+
 	bool m_textureMapSaveAsAwaitingSurfaceName = false;
 	std::string m_textureMapSaveAsSurfaceTargetName;
+
+	HostModalMode m_hostModalMode = HostModalMode::Hidden;
+	int m_hostModalSelectedIndex = 0;
+	bool m_hostModalYesSelected = true;
+	std::string m_hostModalMessage;
+	TextEntrySession m_hostTextEntry;
 
 	vitru::ProjectAssetRepository m_assetRepository;
 

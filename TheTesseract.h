@@ -17,12 +17,14 @@
 
 #include "DiagnosticIdle.h"
 #include "ParticleSimWorkspace.h"
+#include "SingleParticleWorkspace.h"
 
 struct cudaGraphicsResource;
 
 class Tesseract {
 public:
 	bool initialize(WorkspaceServices services);
+	void shutdown();
 
 	void update(const WorkspaceFrameContext& frame);
 	void render(const WorkspaceFrameContext& frame);
@@ -32,11 +34,27 @@ public:
 	WorkspacePresentation
 		presentation() const;
 	
+	// --- SINGLE_PARTICLE --- //
+	WorkspaceMenuPresentation menu() const;
+	bool handleMenuCommand(int command);
+	SingleParticleWorkspace::HostRequest takeSingleParticleHostRequest();
+	bool exportSingleParticleVolume(std::vector<float>& output) const;
+	bool restoreSingleParticleVolume(const std::vector<float>& input, const int3& size);
+	const int3& singleParticleVolumeSize() const;
+	MarchingCubes* singleParticleMarchingCubes() const;
+	bool singleParticleHasCommittedGeometry() const;
+	float singleParticleRadius() const;
+	void activateLoadedSingleParticleBase(bool editableVolumeRestored);
+
 private:
+	void synchronizeActiveCartridge();
+	void activateCartridge(IWorkspace* workspace, const char* name);
+
 	WorkspaceServices m_services;
 
 	DiagnosticIdle m_diagnosticIdle;
 	ParticleSimWorkspace m_particleSimWorkspace;
+	SingleParticleWorkspace m_singleParticleWorkspace;
 
 	IWorkspace* m_activeWorkspace = nullptr;
 };

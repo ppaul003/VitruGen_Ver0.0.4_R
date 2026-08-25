@@ -4,6 +4,7 @@
 #include "WorkspaceContext.h"
 #include "WorkspaceInput.h"
 #include "WorkspacePresentation.h"
+#include "WorkspaceMenu.h"
 
 class IWorkspace {
 
@@ -32,6 +33,16 @@ public:
 
 	virtual WorkspacePresentation
 		buildPresentation() const = 0;
+
+	virtual WorkspaceMenuPresentation buildMenu() const {
+		return WorkspaceMenuPresentation{};
+	}
+
+	virtual bool handleMenuCommand(int command, WorkspaceServices& services) {
+		(void)command;
+		(void)services;
+		return false;
+	}
 };
 
 #endif

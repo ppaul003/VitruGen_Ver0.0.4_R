@@ -32,6 +32,25 @@ bool Tesseract::initialize(WorkspaceServices services) {
 	m_services = services;
 
 	// ---------------------------------------------------------
+	// Initialize cartridge.
+	// ---------------------------------------------------------
+	if (!m_diagnosticIdle.initialize(m_services)) {
+
+		printf(
+			"[Tesseract] ERROR: "
+			"DiagnosticIdle initialization failed.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_singleParticleWorkspace.initialize(m_services)) {
+		printf(
+			"[Tesseract] ERROR: "
+			"SingleParticleWorkspace initialization failed.\n");
+		return false;
+	}
+	// ---------------------------------------------------------
 	// DiagnosticIdle is the first cartridge inserted into the
 	// Tesseract workspace socket.
 	//
@@ -39,25 +58,6 @@ bool Tesseract::initialize(WorkspaceServices services) {
 	// this direct assignment.
 	// ---------------------------------------------------------
 	m_activeWorkspace = &m_diagnosticIdle;
-
-	// ---------------------------------------------------------
-	// Initialize cartridge.
-	// ---------------------------------------------------------
-	if (!m_activeWorkspace->initialize(m_services)) {
-
-		printf(
-			"[Tesseract] ERROR: "
-			"DiagnosticIdle initialization failed.\n"
-		);
-
-		m_activeWorkspace = nullptr;
-
-		return false;
-	}
-
-	// ---------------------------------------------------------
-	// Enter cartridge runtime.
-	// ---------------------------------------------------------
 	m_activeWorkspace->enter(m_services);
 
 	printf(
@@ -72,7 +72,14 @@ bool Tesseract::initialize(WorkspaceServices services) {
 	return true;
 }
 
+void Tesseract::shutdown() {
+	if (m_activeWorkspace) m_activeWorkspace->exit(m_services);
+	m_activeWorkspace = nullptr;
+	
+	m_singleParticleWorkspace.shutdown();
+}
 void Tesseract::update(const WorkspaceFrameContext& frame) {
+	synchronizeActiveCartridge();
 	if (!m_activeWorkspace)
 		return;
 
@@ -88,6 +95,7 @@ void Tesseract::update(const WorkspaceFrameContext& frame) {
 // RENDER
 // =============================================================================
 void Tesseract::render(const WorkspaceFrameContext& frame) {
+	synchronizeActiveCartridge();
 	if (!m_activeWorkspace)
 		return;
 
@@ -107,10 +115,15 @@ bool Tesseract::handleInput(const WorkspaceInputEvent& event) {
 	if (!m_activeWorkspace)
 		return false;
 
+
 	// ---------------------------------------------------------
 	// Route generic input event to active cartridge.
 	// ---------------------------------------------------------
-	return m_activeWorkspace->handleInput(event, m_services);
+	const bool handled =
+		m_activeWorkspace->handleInput(event, m_services);
+
+	synchronizeActiveCartridge();
+	return handled;
 }
 
 // =============================================================================
@@ -138,3 +151,81 @@ Tesseract::presentation() const {
 	// ---------------------------------------------------------
 	return m_activeWorkspace->buildPresentation();
 }
+
+WorkspaceMenuPresentation Tesseract::menu() const {
+	return m_activeWorkspace
+		? m_activeWorkspace->buildMenu()
+		: WorkspaceMenuPresentation{};
+}
+
+bool Tesseract::handleMenuCommand(int command) {
+	if (!m_activeWorkspace) return false;
+	const bool handled = m_activeWorkspace->handleMenuCommand(command, m_services);
+	synchronizeActiveCartridge();
+	return handled;
+}
+
+SingleParticleWorkspace::HostRequest
+Tesseract::takeSingleParticleHostRequest() {
+	return m_singleParticleWorkspace.takeHostRequest();
+}
+
+bool Tesseract::exportSingleParticleVolume(std::vector<float>& output) const {
+	return m_singleParticleWorkspace.exportWorkingVolumeToHost(output);
+}
+
+bool Tesseract::restoreSingleParticleVolume(
+	const std::vector<float>& input,
+	const int3& size) {
+	return m_singleParticleWorkspace.restoreCommittedVolumeFromHost(input, size);
+}
+
+const int3& Tesseract::singleParticleVolumeSize() const {
+	return m_singleParticleWorkspace.getVolumeSize();
+}
+
+MarchingCubes* Tesseract::singleParticleMarchingCubes() const {
+	return m_singleParticleWorkspace.marchingCubes();
+}
+
+bool Tesseract::singleParticleHasCommittedGeometry() const {
+	return m_singleParticleWorkspace.hasCommittedGeometry();
+}
+
+float Tesseract::singleParticleRadius() const {
+	return m_singleParticleWorkspace.particleRadius();
+}
+
+void Tesseract::activateLoadedSingleParticleBase(bool editableVolumeRestored) {
+	m_singleParticleWorkspace.activateLoadedStaticParticleBase(editableVolumeRestored);
+}
+
+void Tesseract::synchronizeActiveCartridge() {
+	if (!m_services.arbiter) return;
+
+	IWorkspace* desired = &m_diagnosticIdle;
+	const char* desiredName = "DIAGNOSTIC_IDLE";
+
+	if (!m_services.arbiter->isGlobalShell() &&
+		m_services.arbiter->getWorkspaceDomain() ==
+		TheArbiter::WorkspaceDomain::GRID_3D) {
+
+		desired = &m_singleParticleWorkspace;
+		desiredName = "SINGLE_PARTICLE_MCAD";
+	}
+
+	activateCartridge(desired, desiredName);
+}
+
+void Tesseract::activateCartridge(
+	IWorkspace* workspace,
+	const char* name) {
+
+	if (!workspace || workspace == m_activeWorkspace) return;
+	if (m_activeWorkspace) m_activeWorkspace->exit(m_services);
+	m_activeWorkspace = workspace;
+	m_activeWorkspace->enter(m_services);
+
+	printf("[Tesseract] Active workspace: %s\n", name);
+}
+

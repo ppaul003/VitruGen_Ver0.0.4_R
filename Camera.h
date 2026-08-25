@@ -39,6 +39,7 @@ public:
 	float* getRotation() { return m_camera_rot; };
 	float* getLaggedTranslation() { return m_camera_trans_lag; };
 	float* getLaggedRotation() { return m_camera_rot_lag; };
+	const float* getLaggedRotation() const { return m_camera_rot_lag; };
 
 	// --- CAMERA TRANSFORMS ---
 	static void xform(float* v, float* r, GLfloat* m);

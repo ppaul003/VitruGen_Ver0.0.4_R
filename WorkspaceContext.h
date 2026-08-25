@@ -4,6 +4,7 @@
 class EuclidRenderer;
 class TheArbiter;
 class ViewPort;
+class CameraProcessor;
 
 struct WorkspaceFrameContext {
 	
@@ -20,6 +21,8 @@ struct WorkspaceFrameContext {
 	float phiRad = 0.0f;
 
 	float zoom = 1.0f;
+	float particleWorkspaceZs = 256.0f;
+	float volumeRenderZs = 256.0f;
 
 	bool displayEnabled = true;
 };
@@ -30,6 +33,7 @@ struct WorkspaceServices {
 	EuclidRenderer* renderer = nullptr;
 	TheArbiter* arbiter = nullptr;
 	ViewPort* viewport = nullptr;
+	CameraProcessor* camera = nullptr;
 };
 
 #endif

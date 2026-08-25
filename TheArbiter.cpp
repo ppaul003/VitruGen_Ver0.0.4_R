@@ -119,6 +119,41 @@ TheArbiter::routeKeyboard(const KeyboardInput::KeyEvent& event) const {
 
 		break;
 
+	case KeyboardInput::KEY_0:
+		result.workspaceInput.action = WorkspaceInputAction::Option0;
+		break;
+
+	case KeyboardInput::KEY_1:
+		result.workspaceInput.action = WorkspaceInputAction::Option1;
+		break;
+
+	case KeyboardInput::KEY_2:
+		result.workspaceInput.action = WorkspaceInputAction::Option2;
+		break;
+
+	case KeyboardInput::KEY_3:
+		result.workspaceInput.action = WorkspaceInputAction::Option3;
+		break;
+
+	case KeyboardInput::KEY_4:
+		result.workspaceInput.action = WorkspaceInputAction::Option4;
+		break;
+
+	case KeyboardInput::KEY_5:
+		result.workspaceInput.action = WorkspaceInputAction::Option5;
+		break;
+
+	case KeyboardInput::KEY_6:
+		result.workspaceInput.action = WorkspaceInputAction::Option6;
+		break;
+
+	case KeyboardInput::KEY_7:
+		result.workspaceInput.action = WorkspaceInputAction::Option7;
+		break;
+
+	case KeyboardInput::KEY_8:
+		result.workspaceInput.action = WorkspaceInputAction::Option8;
+		break;
 	default:
 		result.workspaceInput.action =
 			WorkspaceInputAction::None;

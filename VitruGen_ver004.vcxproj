@@ -99,6 +99,7 @@
     <ClCompile Include="PngImage.cpp" />
     <ClCompile Include="ProjectAssetRepository.cpp" />
     <ClCompile Include="renderer_Euclid.cpp" />
+    <ClCompile Include="SingleParticleWorkspace.cpp" />
     <ClCompile Include="StaticParticleAsset.cpp" />
     <ClCompile Include="StaticParticleAssetIO.cpp" />
     <ClCompile Include="TextEntry.cpp" />
@@ -138,6 +139,7 @@
     <ClInclude Include="ProjectAssetRepository.h" />
     <ClInclude Include="renderer_Euclid.h" />
     <ClInclude Include="render_utils.h" />
+    <ClInclude Include="SingleParticleWorkspace.h" />
     <ClInclude Include="StaticParticleAsset.h" />
     <ClInclude Include="StaticParticleAssetIO.h" />
     <ClInclude Include="tables.h" />
@@ -148,6 +150,7 @@
     <ClInclude Include="VspaManifest.h" />
     <ClInclude Include="WorkspaceContext.h" />
     <ClInclude Include="WorkspaceInput.h" />
+    <ClInclude Include="WorkspaceMenu.h" />
     <ClInclude Include="WorkspacePresentation.h" />
   </ItemGroup>
   <ItemGroup>

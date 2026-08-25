@@ -20,7 +20,21 @@ enum class WorkspaceInputAction {
 	PointerMove,
 
 	ZoomIn,
-	ZoomOut
+	ZoomOut,
+
+	// Generic numbered command slots used by workspaces that expose
+	// keyboard-selectable transform or tool modes. The Arbiter owns
+	// only the raw-key translation; the active cartridge supplies meaning.
+	Option0,
+	Option1,
+	Option2,
+	Option3,
+	Option4,
+	Option5,
+	Option6,
+	Option7,
+	Option8
+
 };
 
 struct WorkspaceInputEvent {
