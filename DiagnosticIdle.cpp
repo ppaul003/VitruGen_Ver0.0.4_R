@@ -19,190 +19,122 @@ bool DiagnosticIdle::initialize(
 }
 
 void DiagnosticIdle::enter(WorkspaceServices& services) {
-	
-	m_sliceCycle = 0.0f;
+	(void)services;
 }
 
-void DiagnosticIdle::exit(
-	WorkspaceServices& services) {
+void DiagnosticIdle::exit(WorkspaceServices& services) {
 }
 
 void DiagnosticIdle::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
-	// ---------------------------------------------------------
-	// GOLD Ver004 idle slice animation:
-	//
-	//     0 -> 1 : XY
-	//     1 -> 2 : XZ
-	//     2 -> 3 : YZ
-	//
-	// 0.35 cycle units / second.
-	//
-	// Full XYZ sequence:
-	//     3 / 0.35 ~= 8.57 seconds
-	// ---------------------------------------------------------
-	m_sliceCycle = fmod(frame.elapsedTime * 0.35f, 3.0f);
 	
-	if (m_sliceCycle < 0.0f) {
-	
-		m_sliceCycle += 3.0f;
-	}
-}
+	const float dt = frame.deltaTime;
+	switch (m_visualTransition) {
 
-WorkspacePresentation
-DiagnosticIdle::buildPresentation() const {
+	// -----------------------------------------------------
+	// NORMAL LAYER 0
+	// -----------------------------------------------------
+	case VisualTransitionState::Idle:
+		
+		m_previewRotationDegrees +=
+			kPreviewRotationSpeed * dt;
 
-	WorkspacePresentation presentation;
+		m_sliceTravel += kSliceCycleSpeed * dt;
 
-	presentation.panelVisible = true;
+		break;
 
-	// ---------------------------------------------------------
-	// DiagnosticIdle remains inserted while Layer-1 cartridges
-	// are intentionally outside this sprint.  The structural
-	// transition is still recorded by TheArbiter, and this small
-	// fallback makes that boundary explicit without implementing
-	// any domain workspace behavior.
-	// ---------------------------------------------------------
-	if (m_arbiter && !m_arbiter->isGlobalShell()) {
+	// -----------------------------------------------------
+	// GRID_3D ENTER:
+	// keep rotating until the NEXT +Z/front pass.
+	// -----------------------------------------------------
+	case VisualTransitionState::Grid3D_OrientToFront:
 
-		presentation.workspaceName =
-			std::string("LAYER 1 -> ") +
-			selectedEnvironmentName() +
-			" WORKSPACE CONFIGURATION";
+		m_previewRotationDegrees +=
+			kPreviewRotationSpeed * dt;
 
-		presentation.statusLine =
-			std::string(selectedEnvironmentName()) +
-			" cartridge is not migrated.";
+		// Slice animation continues normally while
+		// orientation waits for its next pass.
+		m_sliceTravel += kSliceCycleSpeed * dt;
+		if (m_previewRotationDegrees >= m_targetRotationDegrees) {
 
-		presentation.statusTone =
-			WorkspaceStatusTone::Warning;
+			m_previewRotationDegrees = m_targetRotationDegrees;
 
-		presentation.footerLine1 =
-			"Q: Back one layer";
+			// Find the NEXT XY center crossing:
+			//
+			// XY sweep occupies cycle 0 -> 1.
+			// center occurs at 0.5.
+			//
+			const float cycle = floor(m_sliceTravel / 3.0f);
+			float target = cycle * 3.0f + 0.5f;
 
-		presentation.footerLine2 =
-			"ESC: Exit";
+			if (target <= m_sliceTravel) {
 
-		return presentation;
-	}
+				target += 3.0f;
+			}
 
-	presentation.workspaceName =
-		"LAYER 0 -> MENU";
+			m_targetSliceTravel = target;
 
-	WorkspacePanelSection environmentSection;
-
-	WorkspacePanelRow environmentRow;
-	environmentRow.label =
-		"[1]: ENVIRONMENT SELECTION";
-	environmentRow.value =
-		selectedEnvironmentName();
-	environmentRow.selectable = true;
-	environmentRow.selected = true;
-
-	environmentSection.rows.push_back(
-		environmentRow
-	);
-
-	presentation.sections.push_back(
-		environmentSection
-	);
-
-	if (!m_arbiter ||
-		m_arbiter->getWorkspaceDomain() ==
-		TheArbiter::WorkspaceDomain::NONE) {
-
-		presentation.statusLine =
-			"IDLE selected: E is locked.";
-
-		presentation.statusTone =
-			WorkspaceStatusTone::Warning;
-	}
-	else {
-
-		presentation.statusLine =
-			std::string(selectedEnvironmentName()) +
-			" selected: press E to configure.";
-
-		presentation.statusTone =
-			WorkspaceStatusTone::Ready;
-	}
-
-	presentation.footerLine1 =
-		"A / D: Change selection     E: Enter";
-
-	presentation.footerLine2 =
-		"ESC: Exit";
-
-	return presentation;
-}
-
-const char* DiagnosticIdle::selectedEnvironmentName() const {
-
-	if (!m_arbiter)
-		return "IDLE";
-
-	switch (m_arbiter->getWorkspaceDomain()) {
-	case TheArbiter::WorkspaceDomain::NONE:
-		return "IDLE";
-
-	case TheArbiter::WorkspaceDomain::GRID_2D:
-		return "GRID_2D";
-
-	case TheArbiter::WorkspaceDomain::GRID_3D:
-		return "GRID_3D";
-
-	case TheArbiter::WorkspaceDomain::SIMCAD_4D:
-		return "SIMCAD_4D";
-	}
-
-	return "IDLE";
-}
-
-void DiagnosticIdle::cycleEnvironment(int direction) {
-
-	if (!m_arbiter || direction == 0)
-		return;
-
-	using Domain = TheArbiter::WorkspaceDomain;
-
-	static constexpr Domain kEnvironmentOrder[] = {
-		Domain::NONE,
-		Domain::GRID_2D,
-		Domain::GRID_3D,
-		Domain::SIMCAD_4D
-	};
-
-	int currentIndex = 0;
-
-	for (int index = 0; index < 4; ++index) {
-
-		if (kEnvironmentOrder[index] ==
-			m_arbiter->getWorkspaceDomain()) {
-
-			currentIndex = index;
-			break;
+			m_visualTransition =
+				VisualTransitionState::
+				Grid3D_CaptureSlice;
 		}
+
+		break;
+
+	// -----------------------------------------------------
+	// Wait for XY plane to reach Z = 0.
+	// -----------------------------------------------------
+	case VisualTransitionState::Grid3D_CaptureSlice:
+
+		m_sliceTravel += kSliceCycleSpeed * dt;
+		if (m_sliceTravel >= m_targetSliceTravel) {
+
+			m_sliceTravel = m_targetSliceTravel;
+
+			m_visualTransition =
+				VisualTransitionState::
+				Grid3D_HoldCenter;
+
+			m_grid3DEnterComplete = true;
+		}
+
+		break;
+
+	// -----------------------------------------------------
+	// Hold cube front-facing with XY slice at Z=0
+	// while Camera performs its transition.
+	// -----------------------------------------------------
+	case VisualTransitionState::Grid3D_HoldCenter:
+
+		break;
+
+	// -----------------------------------------------------
+	// RETURN:
+	// release XY slice from center through remainder
+	// of its Z traversal.
+	// -----------------------------------------------------
+	case VisualTransitionState::Grid3D_ReleaseSlice:
+
+		m_sliceTravel += kSliceCycleSpeed * dt;
+		if (m_sliceTravel >= m_targetSliceTravel) {
+
+			m_sliceTravel = m_targetSliceTravel;
+			m_visualTransition = VisualTransitionState::Idle;
+			m_grid3DReturnComplete = true;
+		}
+
+		break;
 	}
-
-	const int step = direction < 0 ? -1 : 1;
-	const int nextIndex =
-		(currentIndex + step + 4) % 4;
-
-	m_arbiter->setWorkspaceDomain(
-		kEnvironmentOrder[nextIndex]
-	);
 }
 
 void DiagnosticIdle::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	if (!services.renderer)
-		return;
+	if (!services.renderer) return;
 
 	EuclidRenderer& renderer = *services.renderer;
-
 	EuclidRenderer::UniformGrid grid;
 
 	constexpr int kIdleGridDim = 64;
@@ -232,12 +164,23 @@ void DiagnosticIdle::render(
 	display.minorGrid = false;
 	display.axes = true;
 
+	glPushMatrix();
+
+	const float visualRotation =
+		fmod(m_previewRotationDegrees, 360.0f);
+
+	glRotatef(visualRotation, 0.0f, 1.0f, 0.0f);
+
+	// UniformGrid
 	renderer.drawUniformGrid(grid, display);
 
-	const int segment =
-		std::min(2, static_cast<int>(m_sliceCycle));
+	float sliceCycle = fmod(m_sliceTravel, 3.0f);
+	if (sliceCycle < 0.0f) sliceCycle += 3.0f;
 
-	const float local = m_sliceCycle -
+	const int segment =
+		std::min(2, static_cast<int>(sliceCycle));
+
+	const float local = sliceCycle -
 		static_cast<float>(segment);
 
 	// ---------------------------------------------------------
@@ -290,23 +233,17 @@ void DiagnosticIdle::render(
 		break;
 	}
 
-	renderer.drawGridPlane(
-		grid,
-		plane,
-		planePosition,
-		false
-	);
+	// slice
+	renderer.drawGridPlane(grid, plane, planePosition, false);
+	glPopMatrix();
 }
 
 bool DiagnosticIdle::handleInput(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
 
-	if (!m_arbiter)
-		m_arbiter = services.arbiter;
-
-	if (!m_arbiter)
-		return false;
+	if (!m_arbiter) m_arbiter = services.arbiter;
+	if (!m_arbiter) return false;
 
 	// ---------------------------------------------------------
 	// The root cartridge supplies Layer-0 meaning for the
@@ -325,12 +262,8 @@ bool DiagnosticIdle::handleInput(
 
 		case WorkspaceInputAction::Activate:
 			// GOLD keeps E locked while IDLE is selected.
-			if (m_arbiter->getWorkspaceDomain() !=
-				TheArbiter::WorkspaceDomain::NONE) {
-
-				m_arbiter->setApplicationLayer(
-					TheArbiter::ApplicationLayer::DOMAIN_SELECTION
-				);
+			if (m_arbiter->getWorkspaceDomain() != TheArbiter::WorkspaceDomain::NONE) {
+				m_arbiter->requestEnterDomain(m_arbiter->getWorkspaceDomain());
 			}
 
 			return true;
@@ -350,12 +283,183 @@ bool DiagnosticIdle::handleInput(
 	if (m_arbiter->isDomainSelection() &&
 		input.action == WorkspaceInputAction::Back) {
 
-		m_arbiter->setApplicationLayer(
-			TheArbiter::ApplicationLayer::GLOBAL_SHELL
-		);
-
+		m_arbiter->requestReturnToGlobalShell(m_arbiter->getWorkspaceDomain());
 		return true;
 	}
 
 	return false;
 }
+
+WorkspacePresentation
+DiagnosticIdle::buildPresentation() const {
+
+	WorkspacePresentation presentation;
+
+	presentation.panelVisible = true;
+
+	// ---------------------------------------------------------
+	// DiagnosticIdle remains inserted while Layer-1 cartridges
+	// are intentionally outside this sprint.  The structural
+	// transition is still recorded by TheArbiter, and this small
+	// fallback makes that boundary explicit without implementing
+	// any domain workspace behavior.
+	// ---------------------------------------------------------
+	if (m_arbiter && !m_arbiter->isGlobalShell()) {
+
+		presentation.workspaceName =
+			std::string("LAYER 1 -> ") +
+			selectedEnvironmentName() +
+			" WORKSPACE CONFIGURATION";
+
+		presentation.statusLine =
+			std::string(selectedEnvironmentName()) +
+			" cartridge is not migrated.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Warning;
+
+		presentation.footerLine1 =
+			"Q: Back one layer";
+
+		presentation.footerLine2 =
+			"ESC: Exit";
+
+		return presentation;
+	}
+
+	presentation.workspaceName =
+		"LAYER 0 -> MENU";
+
+	WorkspacePanelSection environmentSection;
+
+	WorkspacePanelRow environmentRow;
+	environmentRow.label = "[1]: ENVIRONMENT SELECTION";
+	environmentRow.value = selectedEnvironmentName();
+
+	environmentRow.selectable = true;
+	environmentRow.selected = true;
+
+	environmentSection.rows.push_back(environmentRow);
+	presentation.sections.push_back(environmentSection);
+
+	if (!m_arbiter || 
+		m_arbiter->getWorkspaceDomain() ==
+		TheArbiter::WorkspaceDomain::NONE) {
+
+		presentation.statusLine =
+			"IDLE selected: E is locked.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Warning;
+	}
+	else {
+
+		presentation.statusLine =
+			std::string(selectedEnvironmentName()) +
+			" selected: press E to configure.";
+
+		presentation.statusTone =
+			WorkspaceStatusTone::Ready;
+	}
+
+	presentation.footerLine1 =
+		"A / D: Change selection     E: Enter";
+
+	presentation.footerLine2 =
+		"ESC: Exit";
+
+	return presentation;
+}
+
+void DiagnosticIdle::beginGrid3DEnterTransition() {
+
+	m_grid3DEnterComplete = false;
+	m_grid3DReturnComplete = false;
+
+	const float revolution =
+		floor(m_previewRotationDegrees / 360.0f);
+
+	// Strictly NEXT pass
+	m_targetRotationDegrees =
+		(revolution + 1.0f) * 360.0f;
+
+	m_visualTransition =
+		VisualTransitionState::Grid3D_OrientToFront;
+
+}
+
+void DiagnosticIdle::beginGrid3DReturnTransition() {
+
+	m_grid3DReturnComplete = false;
+	// Cube remains exactly front-facing.
+	//
+	// m_sliceTravel was deliberately frozen at
+	// an XY center crossing during entry.
+	//
+	// Continue from center to end of that XY pass.
+	m_targetSliceTravel =
+		m_sliceTravel + 0.5f;
+
+	m_visualTransition =
+		VisualTransitionState::
+		Grid3D_ReleaseSlice;
+}
+
+const char* DiagnosticIdle::selectedEnvironmentName() const {
+
+	if (!m_arbiter)
+		return "IDLE";
+
+	switch (m_arbiter->getWorkspaceDomain()) {
+	case TheArbiter::WorkspaceDomain::NONE:
+		return "IDLE";
+
+	case TheArbiter::WorkspaceDomain::GRID_2D:
+		return "GRID_2D";
+
+	case TheArbiter::WorkspaceDomain::GRID_3D:
+		return "GRID_3D";
+
+	case TheArbiter::WorkspaceDomain::SIMCAD_4D:
+		return "SIMCAD_4D";
+	}
+
+	return "IDLE";
+}
+
+void DiagnosticIdle::cycleEnvironment(int direction) {
+
+	if (!m_arbiter || direction == 0)
+		return;
+
+	using Domain = TheArbiter::WorkspaceDomain;
+
+	static constexpr Domain kEnvironmentOrder[] = {
+		Domain::NONE,
+		Domain::GRID_2D,
+		Domain::GRID_3D,
+		Domain::SIMCAD_4D
+	};
+
+	int currentIndex = 0;
+
+	for (int index = 0; index < 4; index++) {
+
+		if (kEnvironmentOrder[index] ==
+			m_arbiter->getWorkspaceDomain()) {
+
+			currentIndex = index;
+			break;
+		}
+	}
+
+	const int step = direction < 0 ? -1 : 1;
+	const int nextIndex =
+		(currentIndex + step + 4) % 4;
+
+	m_arbiter->setWorkspaceDomain(
+		kEnvironmentOrder[nextIndex]
+	);
+}
+
+

@@ -11,22 +11,35 @@ static float clampCameraFloat(float v, float lo, float hi) {
 	return v;
 }
 
+static float smoothStepCamera01(float t) {
+	if (t <= 0.0f) return 0.0f;
+	if (t >= 1.0f) return 1.0f;
+	return t * t * (3.0f - 2.0f * t);
+}
+
+static float lerpCameraFloat(float a, float b, float t) {
+	return a + (b - a) * t;
+}
+
 CameraProcessor::CameraProcessor() :
 	m_camera_trans{ 0.0f, 0.0f, -5.0f },
 	m_camera_rot{ 0.0f, 0.0f, 0.0f },
 	m_camera_trans_lag{ 0.0f, 0.0f, -5.0f },
 	m_camera_rot_lag{ 0.0f, 0.0f, 0.0f },
 	m_menuCubeRotation(0.0f) {}
+
 CameraProcessor::~CameraProcessor() {}
 
 void CameraProcessor::zoom(float amount) {
 	m_camera_trans[2] +=
 		amount * fabs(m_camera_trans[2]);
 };
+
 void CameraProcessor::orbit(float dx, float dy) {
 	m_camera_rot[0] += dy / 5.0f;
 	m_camera_rot[1] += dx / 5.0f;
 };
+
 void CameraProcessor::updateLag() {
 	for (int c = 0; c < 3; c++) {
 		m_camera_trans_lag[c] +=
@@ -46,16 +59,8 @@ void CameraProcessor::updateLag() {
 		}
 	}
 }
-void CameraProcessor::applyMenuCameraTransform(float previewRotationDegrees) {
-	// Ver0.0.2: menu preview is also camera-lagged, so returning from
-	// deeper layers back to Layer 0 no longer hard-snaps the view.
-	m_camera_trans[0] = 1.65f;
-	m_camera_trans[1] = 0.0f;
-	m_camera_trans[2] = -8.0f;
 
-	m_camera_rot[0] = 18.0f;
-	m_camera_rot[1] = previewRotationDegrees;
-	m_camera_rot[2] = 0.0f;
+void CameraProcessor::applyMenuCameraTransform() {
 
 	glTranslatef(
 		m_camera_trans_lag[0],
@@ -63,10 +68,22 @@ void CameraProcessor::applyMenuCameraTransform(float previewRotationDegrees) {
 		m_camera_trans_lag[2]
 	);
 
-	glRotatef(m_camera_rot_lag[0], 1.0f, 0.0f, 0.0f);
-	glRotatef(m_camera_rot_lag[1], 0.0f, 1.0f, 0.0f);
-	glRotatef(m_camera_rot_lag[2], 0.0f, 0.0f, 1.0f);
+	glRotatef(
+		m_camera_rot_lag[0],
+		1.0f, 0.0f, 0.0f
+	);
+
+	glRotatef(
+		m_camera_rot_lag[1],
+		0.0f, 1.0f, 0.0f
+	);
+
+	glRotatef(
+		m_camera_rot_lag[2],
+		0.0f, 0.0f, 1.0f
+	);
 }
+
 void CameraProcessor::applyViewCameraTransform() {
 	glTranslatef(
 		m_camera_trans_lag[0],
@@ -78,17 +95,228 @@ void CameraProcessor::applyViewCameraTransform() {
 	glRotatef(m_camera_rot_lag[1], 0.0, 1.0f, 0.0f);
 }
 
+// =============================================================================
+// CAMERA POSE TRANSITION -> STANDARD GRID_3D
+// =============================================================================
+void CameraProcessor::beginTransitionToStandard3D(float duration) {
+	m_bumpT = 0.0f;
+
+	// ---------------------------------------------------------
+	// Capture the pose that is ACTUALLY being rendered.
+	//
+	// The lagged arrays represent the current visible camera,
+	// so beginning here prevents a jump when the transition
+	// starts.
+	// ---------------------------------------------------------
+	for (int c = 0; c < 3; c++) {
+
+		m_poseStartTrans[c] = m_camera_trans_lag[c];
+		m_poseStartRot[c] = m_camera_rot_lag[c];
+
+		// Freeze the ordinary camera target at the current
+		// visual pose until updatePoseTransition() takes over.
+		m_camera_trans[c] = m_poseStartTrans[c];
+		m_camera_rot[c] = m_poseStartRot[c];
+	}
+
+	// ---------------------------------------------------------
+	// GRID_3D Layer-1 target.
+	//
+	// Same target used by focusStandard3DView().
+	// ---------------------------------------------------------
+	m_poseTargetTrans[0] = 0.0f;
+	m_poseTargetTrans[1] = 0.0f;
+	m_poseTargetTrans[2] = -5.0f;
+
+	m_poseTargetRot[0] = 0.0f;
+	m_poseTargetRot[1] = 0.0f;
+	m_poseTargetRot[2] = 0.0f;
+
+	m_poseTransitionElapsed = 0.0f;
+	
+	// ---------------------------------------------------------
+	// A non-positive duration means:
+	//     snap directly to the target.
+	// ---------------------------------------------------------
+	if (duration <= 0.0f) {
+
+		for (int c = 0; c < 3; c++) {
+
+			m_camera_trans[c] = m_poseTargetTrans[c];
+			m_camera_rot[c] = m_poseTargetRot[c];
+
+			m_camera_trans_lag[c] = m_poseTargetTrans[c];
+			m_camera_rot_lag[c] = m_poseTargetRot[c];
+		}
+
+		m_poseTransitionDuration = 0.0f;
+		m_poseTransitionActive = false;
+
+		return;
+	}
+
+	m_poseTransitionDuration = duration;
+	m_poseTransitionActive = true;
+}
+
+void CameraProcessor::beginTransitionToMenu(float duration) {
+	// ---------------------------------------------------------
+	// Cancel any transient zoom collision response.
+	// ---------------------------------------------------------
+	m_bumpT = 0.0f;
+
+	// ---------------------------------------------------------
+	// Capture the ACTUAL current camera pose.
+	//
+	// This is particularly important on the return path,
+	// because the user may have orbited the GRID_3D camera.
+	// ---------------------------------------------------------
+	for (int c = 0; c < 3; c++) {
+
+		m_poseStartTrans[c] = m_camera_trans_lag[c];
+		m_poseStartRot[c] = m_camera_rot_lag[c];
+
+		m_camera_trans[c] = m_poseStartTrans[c];
+		m_camera_rot[c] = m_poseStartRot[c];
+	}
+
+	// ---------------------------------------------------------
+	// Stable Layer-0 menu camera pose.
+	//
+	// The diagnostic Tesseract itself now owns its rotating
+	// Y orientation. Camera only returns to its viewing pose.
+	// ---------------------------------------------------------
+	m_poseTargetTrans[0] = 1.65f;
+	m_poseTargetTrans[1] = 0.0f;
+	m_poseTargetTrans[2] = -8.0f;
+
+	m_poseTargetRot[0] = 18.0f;
+	m_poseTargetRot[1] = 0.0f;
+	m_poseTargetRot[2] = 0.0f;
+
+	m_poseTransitionElapsed = 0.0f;
+
+	if (duration <= 0.0f) {
+
+		for (int c = 0; c < 3; c++) {
+
+			m_camera_trans[c] = m_poseTargetTrans[c];
+			m_camera_rot[c] = m_poseTargetRot[c];
+
+			m_camera_trans_lag[c] = m_poseTargetTrans[c];
+			m_camera_rot_lag[c] = m_poseTargetRot[c];
+		}
+
+		m_poseTransitionDuration = 0.0f;
+		m_poseTransitionActive = false;
+
+		return;
+	}
+
+	m_poseTransitionDuration = duration;
+	m_poseTransitionActive = true;
+}
+
+void CameraProcessor::updatePoseTransition(float deltaTime) {
+	if (!m_poseTransitionActive) return;
+
+	// Don't allow a negative frame delta to move the
+	// transition backward.
+	if (deltaTime < 0.0f) deltaTime = 0.0f;
+	m_poseTransitionElapsed += deltaTime;
+
+	// ---------------------------------------------------------
+	// Safety fallback.
+	// ---------------------------------------------------------
+	if (m_poseTransitionDuration <= 0.0f) {
+
+		for (int c = 0; c < 3; c++) {
+
+			m_camera_trans[c] = m_poseTargetTrans[c];
+			m_camera_rot[c] = m_poseTargetRot[c];
+
+			m_camera_trans_lag[c] = m_poseTargetTrans[c];
+			m_camera_rot_lag[c] = m_poseTargetRot[c];
+		}
+
+		m_poseTransitionActive = false;
+		return;
+	}
+
+	// ---------------------------------------------------------
+	// Normalized transition progress.
+	// ---------------------------------------------------------
+	const float rawT = m_poseTransitionElapsed /
+		m_poseTransitionDuration;
+
+	const float t = smoothStepCamera01(rawT);
+
+	// ---------------------------------------------------------
+	// Interpolate all six camera DOFs.
+	//
+	// Write both:
+	//
+	//     target
+	//     lagged/display
+	//
+	// so updateLag() cannot add a second exponential
+	// interpolation on top of this deterministic transition.
+	// ---------------------------------------------------------
+	for (int c = 0; c < 3; c++) {
+
+		const float translation =
+			lerpCameraFloat(
+				m_poseStartTrans[c],
+				m_poseTargetTrans[c],
+				t
+			);
+
+		const float rotation =
+			lerpCameraFloat(
+				m_poseStartRot[c],
+				m_poseTargetRot[c],
+				t
+			);
+
+		m_camera_trans[c] = translation;
+		m_camera_trans_lag[c] = translation;
+
+		m_camera_rot[c] = rotation;
+		m_camera_rot_lag[c] = rotation;
+	}
+
+	// ---------------------------------------------------------
+	// Complete.
+	// ---------------------------------------------------------
+	if (rawT >= 1.0f) {
+
+		for (int c = 0; c < 3; c++) {
+
+			m_camera_trans[c] = m_poseTargetTrans[c];
+			m_camera_trans_lag[c] = m_poseTargetTrans[c];
+
+			m_camera_rot[c] = m_poseTargetRot[c];
+			m_camera_rot_lag[c] = m_poseTargetRot[c];
+		}
+
+		m_poseTransitionElapsed = m_poseTransitionDuration;
+		m_poseTransitionActive = false;
+	}
+}
+
 // -- Camera math helpers ---
 void CameraProcessor::xform(float* v, float* r, GLfloat* m) {
 	r[0] = v[0] * m[0] + v[1] * m[4] + v[2] * m[8] + m[12];
 	r[1] = v[0] * m[1] + v[1] * m[5] + v[2] * m[9] + m[13];
 	r[2] = v[0] * m[2] + v[1] * m[6] + v[2] * m[10] + m[14];
 }
+
 void CameraProcessor::ixform(float* v, float* r, GLfloat* m) {
 	r[0] = v[0] * m[0] + v[1] * m[1] + v[2] * m[2];
 	r[1] = v[0] * m[4] + v[1] * m[5] + v[2] * m[6];
 	r[2] = v[0] * m[8] + v[1] * m[9] + v[2] * m[10];
 }
+
 void CameraProcessor::ixformPoint(float* v, float* r, GLfloat* m) {
 	float x[4];
 	x[0] = v[0] - m[12];
@@ -117,6 +345,7 @@ void CameraProcessor::focus3DFromMenu(float previewRotationDegrees) {
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;
 }
+
 void CameraProcessor::focusStandard3DView() {
 	// Standard 3D workspace target.
 	// Do not touch lag values here; updateLag() will smooth the movement.
@@ -128,6 +357,7 @@ void CameraProcessor::focusStandard3DView() {
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;
 }
+
 void CameraProcessor::focusSingleParticleConfigView() {
 	// Zoomed-in SINGLE_PARTICLE configuration target.
 	// This makes particle 0 easier to see without requiring mouse-wheel zoom.
@@ -147,11 +377,12 @@ void CameraProcessor::setBehaviorMode(CameraBehaviorMode mode) {
 	m_behaviorMode = mode;
 	updateBehavior();
 }
+
 bool CameraProcessor::orbitEnabled() const {
 	// Checkpoint 1:
 	// Only the SINGLE_PARTICLE workplane-lock mode disables orbit.
 	// Everything else behaves like the old camera.
-	return !isWorkplaneLocked();
+	return !m_poseTransitionActive && !isWorkplaneLocked();
 }
 
 bool CameraProcessor::isSingleParticleCamera() const {
@@ -161,6 +392,7 @@ bool CameraProcessor::isSingleParticleCamera() const {
 		m_behaviorMode == CAM_SINGLE_PARTICLE_VOLUME ||
 		m_behaviorMode == CAM_SINGLE_PARTICLE_MARCHING_CUBES;
 }
+
 bool CameraProcessor::isWorkplaneLocked() const {
 	return m_behaviorMode == CAM_SINGLE_PARTICLE_WORKPLANE_LOCKED;
 }
@@ -236,8 +468,10 @@ float CameraProcessor::getOrbitSensitivityScale() const {
 void CameraProcessor::updateBehavior() {
 	switch (m_behaviorMode) {
 	case CAM_MENU_PREVIEW:
-		// Menu preview still receives the live preview rotation from
-		// applyMenuCameraTransform(...). This is only the default target.
+		// Stable Layer-0 viewing pose.
+		//
+		// DiagnosticIdle owns the rotating Tesseract visual.
+		// Camera owns only the observer pose.
 		m_camera_trans[0] = 1.65f;
 		m_camera_trans[1] = 0.0f;
 		m_camera_trans[2] = -8.0f;
@@ -274,12 +508,14 @@ void CameraProcessor::setTargetStandard3D() {
 	m_bumpT = 0.0f;
 	focusStandard3DView();
 }
+
 void CameraProcessor::setTargetSingleParticleClose() {
 	m_bumpT = 0.0f;
 	m_minZoomZ = -1.25f;
 	m_maxZoomZ = -8.0f;
 	focusSingleParticleConfigView();
 }
+
 void CameraProcessor::setTargetSingleParticleWorkplaneLocked() {
 	m_bumpT = 0.0f;
 
@@ -296,6 +532,7 @@ void CameraProcessor::setTargetSingleParticleWorkplaneLocked() {
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;
 }
+
 void CameraProcessor::setTargetVolumeRender() {
 	m_bumpT = 0.0f;
 
@@ -313,6 +550,7 @@ void CameraProcessor::setTargetVolumeRender() {
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;
 }
+
 void CameraProcessor::setTargetMarchingCubes() {
 	m_bumpT = 0.0f;
 
@@ -329,6 +567,7 @@ void CameraProcessor::setTargetMarchingCubes() {
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;
 }
+
 void CameraProcessor::zoomByWheel(int wheelButton) {
 	if (wheelButton != 3 && wheelButton != 4) return;
 
@@ -420,6 +659,7 @@ void CameraProcessor::updatePocketZoomLag() {
 			m_volumeRenderZsTarget;
 	}
 }
+
 void CameraProcessor::zoomParticleWorkspaceByWheel(int wheelButton) {
 	if (wheelButton != 3 && wheelButton != 4) return;
 
@@ -447,6 +687,7 @@ void CameraProcessor::zoomParticleWorkspaceByWheel(int wheelButton) {
 			kParticleWorkspaceZsMax
 		);
 }
+
 void CameraProcessor::zoomVolumeRenderByWheel(int wheelButton) {
 	if (wheelButton != 3 && wheelButton != 4) return;
 
@@ -482,6 +723,7 @@ void CameraProcessor::resetParticleWorkspaceZoom() {
 	m_particleWorkspaceZsTarget =
 		kParticleWorkspaceZsDefault;
 }
+
 void CameraProcessor::resetVolumeRenderZoom() {
 	m_volumeRenderZs =
 		kVolumeRenderZsDefault;
@@ -489,6 +731,7 @@ void CameraProcessor::resetVolumeRenderZoom() {
 	m_volumeRenderZsTarget =
 		kVolumeRenderZsDefault;
 }
+
 void CameraProcessor::resetPocketZooms() {
 	resetParticleWorkspaceZoom();
 	resetVolumeRenderZoom();

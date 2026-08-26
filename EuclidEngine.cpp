@@ -576,17 +576,35 @@ void EuclidEngine::onDisplay() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
-	m_camera.setBehaviorMode(CameraProcessor::CAM_MENU_PREVIEW);
-
+	// ---------------------------------------------------------
+	// Update camera smoothing.
+	//
+	// Camera BEHAVIOR is selected by the current workspace /
+	// Tesseract transition controller.
+	//
+	// EuclidEngine only advances and applies the camera.
+	// ---------------------------------------------------------
 	m_camera.updateLag();
 	m_camera.updatePocketZoomLag();
-
-	const float elapsedTime =
-		static_cast<float>(glutGet(GLUT_ELAPSED_TIME)) * 0.001f;
 	
+	// ---------------------------------------------------------
+	// Apply current camera pose.
+	//
+	// During GRID_3D transitions the Arbiter deliberately keeps
+	// the structural layer unchanged until choreography ends:
+	//
+	// Forward:
+	//     GLOBAL_SHELL remains active until camera transition
+	//     finishes.
+	//
+	// Reverse:
+	//     DOMAIN_SELECTION remains active until return animation
+	//     finishes.
+	//
+	// The transition controller modifies the camera pose itself.
+	// ---------------------------------------------------------
 	if (m_arbiter.isGlobalShell()) {
-		m_camera.setBehaviorMode(CameraProcessor::CAM_MENU_PREVIEW);
-		m_camera.applyMenuCameraTransform(elapsedTime * 25.0f);
+		m_camera.applyMenuCameraTransform();
 	}
 	else {
 		m_camera.applyViewCameraTransform();
@@ -604,7 +622,9 @@ void EuclidEngine::onDisplay() {
 	// Render generic workspace presentation.
 	// ---------------------------------------------------------
 	m_viewport.drawOverlay(m_hostModalMode == HostModalMode::Hidden
-		? m_tesseract.presentation() : buildHostModalPresentation());
+		? m_tesseract.presentation()
+		: buildHostModalPresentation()
+	);
 
 	glutSwapBuffers();
 }

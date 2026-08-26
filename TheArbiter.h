@@ -25,6 +25,13 @@ public:
 		SIMCAD_4D
 	};
 
+	enum class NavigationRequestType {
+		NONE = 0,
+
+		ENTER_DOMAIN,
+		RETURN_GLOBAL_SHELL
+	};
+
 	enum class WorkspaceId {
 		NONE = 0,
 
@@ -65,6 +72,16 @@ public:
 		CMD_EXIT,
 		CMD_REDRAW,
 		CMD_MENU
+	};
+
+	struct NavigationRequest {
+
+		NavigationRequestType type =
+			NavigationRequestType::NONE;
+
+		WorkspaceDomain domain =
+			WorkspaceDomain::NONE;
+
 	};
 
 	// =========================================================
@@ -139,6 +156,11 @@ public:
 
 	const NavigationState& getNavigationState() const { return m_navigation; }
 
+	void requestEnterDomain(WorkspaceDomain domain);
+	void requestReturnToGlobalShell(WorkspaceDomain domain);
+	bool hasNavigationRequest() const { return m_navigationRequest.type != NavigationRequestType::NONE; }
+	NavigationRequest takeNavigationRequest();
+
 	// =========================================================
 	// GENERIC QUERY
 	// =========================================================
@@ -149,6 +171,7 @@ public:
 
 private:
 	NavigationState m_navigation;
+	NavigationRequest m_navigationRequest;
 };
 
 #endif

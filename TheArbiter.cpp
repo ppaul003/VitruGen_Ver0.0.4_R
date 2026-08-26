@@ -269,6 +269,36 @@ TheArbiter::routePointerMove(int x, int y) const {
 	return result;
 }
 
+void TheArbiter::requestEnterDomain(WorkspaceDomain domain) {
+
+	m_navigationRequest.type =
+		NavigationRequestType::ENTER_DOMAIN;
+
+	m_navigationRequest.domain =
+		domain;
+}
+
+void TheArbiter::requestReturnToGlobalShell(WorkspaceDomain domain) {
+
+	m_navigationRequest.type =
+		NavigationRequestType::RETURN_GLOBAL_SHELL;
+
+	m_navigationRequest.domain =
+		domain;
+}
+
+TheArbiter::NavigationRequest 
+TheArbiter::takeNavigationRequest() {
+
+	const NavigationRequest request =
+		m_navigationRequest;
+
+	m_navigationRequest =
+		NavigationRequest{};
+
+	return request;
+}
+
 // =============================================================================
 // GENERIC STRUCTURAL QUERIES
 // =============================================================================

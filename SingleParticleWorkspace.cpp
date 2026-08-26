@@ -578,10 +578,11 @@ void SingleParticleWorkspace::backOneLayer(WorkspaceServices& services) {
 	if (!services.arbiter) return;
 
 	if (services.arbiter->isDomainSelection()) {
-		services.arbiter->setApplicationLayer(
-			TheArbiter::ApplicationLayer::GLOBAL_SHELL);
-		services.arbiter->setActiveWorkspace(TheArbiter::WorkspaceId::DIAGNOSTIC);
-		services.arbiter->setWorkspaceDomain(TheArbiter::WorkspaceDomain::GRID_3D);
+		
+		services.arbiter->requestReturnToGlobalShell(
+			TheArbiter::WorkspaceDomain::GRID_3D
+		);
+
 		return;
 	}
 

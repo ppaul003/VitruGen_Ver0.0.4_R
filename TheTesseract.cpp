@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cmath>
 
+#include "Camera.h"
+
 using namespace std;
 
 namespace {
@@ -79,9 +81,15 @@ void Tesseract::shutdown() {
 	m_singleParticleWorkspace.shutdown();
 }
 void Tesseract::update(const WorkspaceFrameContext& frame) {
-	synchronizeActiveCartridge();
-	if (!m_activeWorkspace)
+	processNavigationRequest();
+
+	if (domainTransitionActive()) {
+		updateDomainTransition(frame);
 		return;
+	}
+
+	synchronizeActiveCartridge();
+	if (!m_activeWorkspace) return;
 
 	// ---------------------------------------------------------
 	// Tesseract does not interpret workspace update behavior.
@@ -95,9 +103,41 @@ void Tesseract::update(const WorkspaceFrameContext& frame) {
 // RENDER
 // =============================================================================
 void Tesseract::render(const WorkspaceFrameContext& frame) {
+
+	// ---------------------------------------------------------
+	// Transition-specific visual routing.
+	// ---------------------------------------------------------
+	if (domainTransitionActive()) {
+
+		switch (m_domainTransitionPhase) {
+
+		case DomainTransitionPhase::ENTER_DOMAIN_VISUAL:
+
+		case DomainTransitionPhase::ENTER_CAMERA:
+			m_diagnosticIdle.render(frame, m_services);
+			return;
+
+		case DomainTransitionPhase::EXIT_CAMERA:
+
+			if (m_activeWorkspace) {
+				m_activeWorkspace->render(frame, m_services);
+			}
+			return;
+
+		case DomainTransitionPhase::EXIT_DOMAIN_VISUAL:
+
+			m_diagnosticIdle.render(frame,m_services);
+			return;
+
+
+		case DomainTransitionPhase::NONE:
+		default:
+			break;
+		}
+	}
+
 	synchronizeActiveCartridge();
-	if (!m_activeWorkspace)
-		return;
+	if (!m_activeWorkspace) return;
 
 	// ---------------------------------------------------------
 	// Workspace decides WHAT should be rendered.
@@ -112,9 +152,8 @@ void Tesseract::render(const WorkspaceFrameContext& frame) {
 // INPUT
 // =============================================================================
 bool Tesseract::handleInput(const WorkspaceInputEvent& event) {
-	if (!m_activeWorkspace)
-		return false;
-
+	if (domainTransitionActive()) return true;
+	if (!m_activeWorkspace) return false;
 
 	// ---------------------------------------------------------
 	// Route generic input event to active cartridge.
@@ -122,7 +161,12 @@ bool Tesseract::handleInput(const WorkspaceInputEvent& event) {
 	const bool handled =
 		m_activeWorkspace->handleInput(event, m_services);
 
-	synchronizeActiveCartridge();
+	// E/Q may have generated an Arbiter navigation request.
+	processNavigationRequest();
+
+	if (!domainTransitionActive())
+		synchronizeActiveCartridge();
+
 	return handled;
 }
 
@@ -198,6 +242,248 @@ float Tesseract::singleParticleRadius() const {
 
 void Tesseract::activateLoadedSingleParticleBase(bool editableVolumeRestored) {
 	m_singleParticleWorkspace.activateLoadedStaticParticleBase(editableVolumeRestored);
+}
+
+void Tesseract::processNavigationRequest() {
+	if (!m_services.arbiter) return;
+
+	// Do not accept another structural navigation request
+	// while one transition is already being performed.
+	if (domainTransitionActive()) return;
+	if (!m_services.arbiter->hasNavigationRequest())
+		return;
+
+	const TheArbiter::NavigationRequest request =
+		m_services.arbiter->takeNavigationRequest();
+
+	using RequestType = TheArbiter::NavigationRequestType;
+	using Domain = TheArbiter::WorkspaceDomain;
+	using Layer = TheArbiter::ApplicationLayer;
+	using Workspace = TheArbiter::WorkspaceId;
+
+	switch (request.type) {
+
+		// =========================================================
+		// LAYER 0 -> DOMAIN
+		// =========================================================
+	case RequestType::ENTER_DOMAIN:
+
+		m_transitionDomain = request.domain;
+
+		// -----------------------------------------------------
+		// GRID_3D gets the animated transition.
+		//
+		// IMPORTANT:
+		// Do NOT change ApplicationLayer yet.
+		// DiagnosticIdle remains inserted until both:
+		//
+		//     Tesseract visual transition
+		//     camera transition
+		//
+		// have completed.
+		// -----------------------------------------------------
+		if (request.domain == Domain::GRID_3D) {
+
+			m_domainTransitionPhase =
+				DomainTransitionPhase::ENTER_DOMAIN_VISUAL;
+
+			m_diagnosticIdle.beginGrid3DEnterTransition();
+			return;
+		}
+
+		// -----------------------------------------------------
+		// GRID_2D / SIMCAD_4D:
+		// retain immediate behavior until their domain-specific
+		// animations are implemented.
+		// -----------------------------------------------------
+		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
+		synchronizeActiveCartridge();
+		return;
+
+
+		// =========================================================
+		// DOMAIN -> LAYER 0
+		// =========================================================
+	case RequestType::RETURN_GLOBAL_SHELL:
+
+		m_transitionDomain = request.domain;
+
+		// -----------------------------------------------------
+		// GRID_3D reverse ordering:
+		//
+		//     camera first
+		//     Tesseract second
+		// -----------------------------------------------------
+		if (request.domain == Domain::GRID_3D) {
+
+			m_domainTransitionPhase =
+				DomainTransitionPhase::EXIT_CAMERA;
+
+			if (m_services.camera) {
+				m_services.camera->beginTransitionToMenu(1.25f);
+			}
+			else {
+				// No camera service:
+				// skip directly to the visual phase.
+				m_domainTransitionPhase =
+					DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
+
+				m_diagnosticIdle.beginGrid3DReturnTransition();
+			}
+
+			return;
+		}
+
+		// Other domains remain immediate for now.
+		m_services.arbiter->setApplicationLayer(Layer::GLOBAL_SHELL);
+		m_services.arbiter->setActiveWorkspace(Workspace::DIAGNOSTIC);
+		m_transitionDomain = Domain::NONE;
+
+		synchronizeActiveCartridge();
+		return;
+
+
+	case RequestType::NONE:
+	default:
+		return;
+	}
+}
+
+void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
+	if (!m_services.arbiter) return;
+	if (!domainTransitionActive()) return;
+
+	using Domain = TheArbiter::WorkspaceDomain;
+	using Layer = TheArbiter::ApplicationLayer;
+	using Workspace = TheArbiter::WorkspaceId;
+
+	switch (m_domainTransitionPhase) {
+
+		// =========================================================
+		// ENTER GRID_3D — PHASE 1
+		//
+		// Cube:
+		//     continue CCW
+		//     wait for next +Z/front pass
+		//     capture XY slice at Z = 0
+		// =========================================================
+	case DomainTransitionPhase::ENTER_DOMAIN_VISUAL:
+
+		// DiagnosticIdle owns the actual cube/slice motion.
+		m_diagnosticIdle.update(frame, m_services);
+		if (!m_diagnosticIdle.grid3DEnterVisualComplete()) return;
+		
+		// -----------------------------------------------------
+		// Tesseract is now:
+		//
+		//     front-facing
+		//     XY plane at Z = 0
+		//
+		// Freeze that visual while the camera moves.
+		// -----------------------------------------------------
+		m_domainTransitionPhase =
+			DomainTransitionPhase::ENTER_CAMERA;
+
+		if (m_services.camera) 
+			m_services.camera->beginTransitionToStandard3D(1.25f);
+		
+		return;
+
+		// =========================================================
+		// ENTER GRID_3D — PHASE 2
+		//
+		// Camera moves toward centered GRID_3D view.
+		// Cube remains frozen front-facing.
+		// =========================================================
+	case DomainTransitionPhase::ENTER_CAMERA:
+
+		// DiagnosticIdle should now be in its hold-center
+		// state, so this update preserves the frozen visual.
+		m_diagnosticIdle.update(frame, m_services);
+
+		if (m_services.camera) {
+
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+		}
+
+		// -----------------------------------------------------
+		// BOTH transitions are complete.
+		//
+		// Only NOW commit Layer 1.
+		// -----------------------------------------------------
+		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
+		m_domainTransitionPhase = DomainTransitionPhase::NONE;
+		m_transitionDomain = Domain::NONE;
+
+		// This will replace DiagnosticIdle with the currently
+		// configured GRID_3D cartridge.
+		synchronizeActiveCartridge();
+		return;
+
+		// =========================================================
+		// RETURN TO LAYER 0 — PHASE 1
+		//
+		// Camera moves back first.
+		// SINGLE_PARTICLE remains structurally active.
+		// =========================================================
+	case DomainTransitionPhase::EXIT_CAMERA:
+
+		// Keep the currently active workspace alive while its
+		// camera retreats.
+		if (m_activeWorkspace && m_activeWorkspace != &m_diagnosticIdle) {
+			m_activeWorkspace->update(frame, m_services);
+		}
+
+		if (m_services.camera) {
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+		}
+
+		// -----------------------------------------------------
+		// Camera has reached Layer-0 pose.
+		//
+		// Start the Tesseract reappearance:
+		// XY plane starts at Z = 0 and continues its sweep.
+		// -----------------------------------------------------
+		m_domainTransitionPhase =
+			DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
+
+		m_diagnosticIdle.beginGrid3DReturnTransition();
+		return;
+
+		// =========================================================
+		// RETURN TO LAYER 0 — PHASE 2
+		//
+		// XY slice releases from center.
+		// Cube resumes normal counter-clockwise idle rotation.
+		// =========================================================
+	case DomainTransitionPhase::EXIT_DOMAIN_VISUAL:
+
+		m_diagnosticIdle.update(frame, m_services);
+		if (!m_diagnosticIdle.grid3DReturnVisualComplete()) return;
+
+		// -----------------------------------------------------
+		// Reverse transition complete.
+		//
+		// NOW commit Layer 0.
+		// -----------------------------------------------------
+		m_services.arbiter->setApplicationLayer(Layer::GLOBAL_SHELL);
+		m_services.arbiter->setActiveWorkspace(Workspace::DIAGNOSTIC);
+
+		if (m_services.camera) {
+			m_services.camera->setBehaviorMode(CameraProcessor::CAM_MENU_PREVIEW);
+		}
+
+		m_domainTransitionPhase = DomainTransitionPhase::NONE;
+		m_transitionDomain = Domain::NONE;
+		synchronizeActiveCartridge();
+		return;
+
+	case DomainTransitionPhase::NONE:
+	default:
+		return;
+	}
 }
 
 void Tesseract::synchronizeActiveCartridge() {

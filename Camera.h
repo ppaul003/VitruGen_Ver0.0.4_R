@@ -32,7 +32,7 @@ public:
 	void orbit(float dx, float dy);
 
 	void updateLag();
-	void applyMenuCameraTransform(float previewRotationDegrees);
+	void applyMenuCameraTransform();
 	void applyViewCameraTransform();
 
 	float* getTranslation() { return m_camera_trans; };
@@ -88,6 +88,11 @@ public:
 		float minStep
 	) const;
 
+	void beginTransitionToStandard3D(float duration = 1.25f);
+	void beginTransitionToMenu(float duration = 1.25f);
+	void updatePoseTransition(float deltaTime);
+	bool poseTransitionActive() const { return m_poseTransitionActive; }
+
 private:
 	// --- SINGLE_PARTICLE local pocket camera distances ---
 	static constexpr float kPocketZoomInertia = 0.10f;
@@ -113,10 +118,20 @@ private:
 	static constexpr float kVolumeRenderDampingStartZs = 128.0f;
 
 	static constexpr float kSingleParticleOrbitMinScale = 0.22f;
+	static constexpr float kInertia = 0.1f;
 
 	CameraBehaviorMode m_behaviorMode = CAM_STANDARD_3D_ORBIT;
 
-	static constexpr float kInertia = 0.1f;
+	bool m_poseTransitionActive = false;
+
+	float m_poseTransitionElapsed = 0.0f;
+	float m_poseTransitionDuration = 1.25f;
+
+	float m_poseStartTrans[3];
+	float m_poseStartRot[3];
+
+	float m_poseTargetTrans[3];
+	float m_poseTargetRot[3];
 
 	float m_camera_trans[3];
 	float m_camera_rot[3];

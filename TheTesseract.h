@@ -23,6 +23,17 @@ struct cudaGraphicsResource;
 
 class Tesseract {
 public:
+	enum class DomainTransitionPhase {
+		NONE = 0,
+
+		ENTER_DOMAIN_VISUAL,
+		ENTER_CAMERA,
+
+		EXIT_CAMERA,
+		EXIT_DOMAIN_VISUAL
+	};
+
+public:
 	bool initialize(WorkspaceServices services);
 	void shutdown();
 
@@ -46,13 +57,24 @@ public:
 	float singleParticleRadius() const;
 	void activateLoadedSingleParticleBase(bool editableVolumeRestored);
 
+	void processNavigationRequest();
+	void updateDomainTransition(const WorkspaceFrameContext& frame);
+	bool domainTransitionActive() const { return m_domainTransitionPhase != DomainTransitionPhase::NONE; }
+
 private:
 	void synchronizeActiveCartridge();
 	void activateCartridge(IWorkspace* workspace, const char* name);
 
+private:
 	WorkspaceServices m_services;
-
 	DiagnosticIdle m_diagnosticIdle;
+
+	DomainTransitionPhase m_domainTransitionPhase =
+		DomainTransitionPhase::NONE;
+
+	TheArbiter::WorkspaceDomain m_transitionDomain =
+		TheArbiter::WorkspaceDomain::NONE;
+
 	ParticleSimWorkspace m_particleSimWorkspace;
 	SingleParticleWorkspace m_singleParticleWorkspace;
 
