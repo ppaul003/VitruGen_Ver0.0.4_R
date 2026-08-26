@@ -54,6 +54,12 @@ public:
 private:
 	const char* selectedEnvironmentName() const;
 	void cycleEnvironment(int direction);
+	
+	void moveGlobalShellCursor(int direciton);
+	void adjustGlobalShellValue(int direciton);
+
+	bool globalShellConfigRead() const;
+	const char* simulationBoxSizeName() const;
 
 private:
 	static constexpr float kPreviewRotationSpeed = 25.0f;
@@ -68,6 +74,18 @@ private:
 	static constexpr float kTransitionRotationSpeed = 120.0f;
 	static constexpr float kTransitionSliceSpeed = 1.40f;
 
+	enum class GlobalShellRow {
+		Environment = 0,
+		SimulationBox,
+		GlobalIllumination,
+		Configure,
+
+		Count
+	};
+
+	GlobalShellRow m_activeShellRow =
+		GlobalShellRow::Environment;
+
 	TheArbiter* m_arbiter = nullptr;
 
 	VisualTransitionState m_visualTransition =
@@ -75,6 +93,9 @@ private:
 
 	bool m_grid3DEnterComplete = false;
 	bool m_grid3DReturnComplete = false;
+
+	int m_requestedSimBoxSize = 4;
+	int m_globalIlluminationDeg = 45;
 
 	float m_previewRotationDegrees = 0.0f;
 

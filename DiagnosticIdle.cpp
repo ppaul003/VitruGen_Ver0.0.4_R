@@ -254,24 +254,46 @@ bool DiagnosticIdle::handleInput(
 	if (m_arbiter->isGlobalShell()) {
 
 		switch (input.action) {
+
+		// --- W
+		case WorkspaceInputAction::Previous:
+			moveGlobalShellCursor(-1);
+			return true;
+
+		// --- S
+		case WorkspaceInputAction::Next:
+			moveGlobalShellCursor(+1);
+			return true;
+
+		// --- A
 		case WorkspaceInputAction::Decrease:
-			cycleEnvironment(-1);
+			adjustGlobalShellValue(-1);
 			return true;
 
+		// --- D
 		case WorkspaceInputAction::Increase:
-			cycleEnvironment(+1);
+			adjustGlobalShellValue(+1);
 			return true;
 
+		// --- E
 		case WorkspaceInputAction::Activate:
-			// GOLD keeps E locked while IDLE is selected.
-			if (m_arbiter->getWorkspaceDomain() != TheArbiter::WorkspaceDomain::NONE) {
-				m_arbiter->requestEnterDomain(m_arbiter->getWorkspaceDomain());
-			}
+			
+			if (m_activeShellRow != GlobalShellRow::Configure)
+				return true;
+
+			// IDLE cannot enter a domain.
+			if (m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE)
+				return true;
+
+			// Placeholder restriction
+			if (m_requestedSimBoxSize != 4)
+				return true;
+
+			m_arbiter->requestEnterDomain(m_arbiter->getWorkspaceDomain());
 
 			return true;
 
 		case WorkspaceInputAction::Back:
-			// GOLD treats Back at the root as a handled no-op.
 			return true;
 
 		default:
@@ -332,40 +354,89 @@ DiagnosticIdle::buildPresentation() const {
 	presentation.workspaceName =
 		"LAYER 0 -> GLOBAL SHELL CONFIG";
 
-	WorkspacePanelSection environmentSection;
+	WorkspacePanelSection shellSelection;
 
+	// =========================================================
+	// [1] ENVIRONMENT
+	// =========================================================
 	WorkspacePanelRow environmentRow;
 	environmentRow.label = "[1]: DOMAIN SELECTION";
 	environmentRow.value = selectedEnvironmentName();
 
 	environmentRow.selectable = true;
-	environmentRow.selected = true;
+	
+	environmentRow.selected =
+		m_activeShellRow == GlobalShellRow::Environment;
 
-	environmentSection.rows.push_back(environmentRow);
-	presentation.sections.push_back(environmentSection);
+	shellSelection.rows.push_back(environmentRow);
+	
 
-	if (!m_arbiter || 
-		m_arbiter->getWorkspaceDomain() ==
-		TheArbiter::WorkspaceDomain::NONE) {
+	// =========================================================
+	// [2] SIM BOX
+	// =========================================================
+	WorkspacePanelRow boxRow;
+	boxRow.label = "[2]: SIMULATION BOX SIZE";
+	boxRow.value = to_string(m_requestedSimBoxSize);
+	boxRow.selectable = true;
+
+	boxRow.selected =
+		m_activeShellRow == GlobalShellRow::SimulationBox;
+
+	shellSelection.rows.push_back(boxRow);
+
+	// =========================================================
+	// [3] GLOBAL ILLUMINATION
+	// =========================================================
+	WorkspacePanelRow lightRow;
+	lightRow.label = "[3]: GLOBAL ILLUMINATION";
+	lightRow.value = to_string(m_globalIlluminationDeg) + " DEG";
+	lightRow.selectable = true;
+
+	lightRow.selected =
+		m_activeShellRow == GlobalShellRow::GlobalIllumination;
+
+	shellSelection.rows.push_back(lightRow);
+
+	// =========================================================
+	// [4] CONFIGURE
+	// =========================================================
+	WorkspacePanelRow configureRow;
+	configureRow.label = "[4]: E TO CONFIG GLOBAL SHELL";
+	configureRow.selectable = true;
+
+	configureRow.selected =
+		m_activeShellRow == GlobalShellRow::Configure;
+
+	shellSelection.rows.push_back(configureRow);
+	presentation.sections.push_back(shellSelection);
+
+	if (m_requestedSimBoxSize != 4) {
 
 		presentation.statusLine =
-			"IDLE selected: E is locked.";
+			"WARNING: SIMULATION BOX SIZE {" +
+			to_string(m_requestedSimBoxSize) +
+			"} IS UNAVAILABLE. SELECT { 4 } TO CONTINUE.";
 
 		presentation.statusTone =
 			WorkspaceStatusTone::Warning;
 	}
+	else if (!m_arbiter || m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE) {
+
+		presentation.statusLine =
+			"IDLE selected: choose a workspace environment.";
+
+		presentation.statusTone = WorkspaceStatusTone::Warning;
+	}
 	else {
 
 		presentation.statusLine =
-			std::string(selectedEnvironmentName()) +
-			" selected: press E to configure.";
+			"READY: GLOBAL SHELL CONFIGURATION VALID.";
 
-		presentation.statusTone =
-			WorkspaceStatusTone::Ready;
+		presentation.statusTone = WorkspaceStatusTone::Ready;
 	}
 
 	presentation.footerLine1 =
-		"A / D: Change selection     E: Enter";
+		"W/S: Select row    A/D: Change value    E: Configure";
 
 	presentation.footerLine2 =
 		"ESC: Exit";
@@ -464,4 +535,94 @@ void DiagnosticIdle::cycleEnvironment(int direction) {
 	);
 }
 
+void DiagnosticIdle::moveGlobalShellCursor(int direction) {
+	if (direction == 0) return;
 
+	const int count =
+		static_cast<int>(GlobalShellRow::Count);
+
+	const int current =
+		static_cast<int>(m_activeShellRow);
+
+	const int step =
+		direction < 0
+		? -1
+		: 1;
+
+	m_activeShellRow =
+		static_cast<GlobalShellRow>((current + step + count) % count);
+}
+
+void DiagnosticIdle::adjustGlobalShellValue(int direction) {
+
+	if (direction == 0) return;
+
+	switch (m_activeShellRow) {
+
+	// =====================================================
+	// [1] ENVIRONMENT
+	// =====================================================
+	case GlobalShellRow::Environment:
+		cycleEnvironment(direction);
+		break;
+
+
+	// =====================================================
+	// [2] SIMULATION BOX
+	// =====================================================
+	case GlobalShellRow::SimulationBox: {
+
+		static constexpr int kBoxSizes[] = {2, 4, 8, 16};
+
+		int index = 0;
+
+		for (int i = 0; i < 4; i++) {
+
+			if (kBoxSizes[i] == m_requestedSimBoxSize) {
+
+				index = i;
+				break;
+			}
+		}
+
+		const int step =
+			direction < 0
+			? -1
+			: 1;
+
+		index = (index + step + 4) % 4;
+		m_requestedSimBoxSize = kBoxSizes[index];
+
+		break;
+	}
+
+	// =====================================================
+	// [3] GLOBAL ILLUMINATION
+	// =====================================================
+	case GlobalShellRow::GlobalIllumination:
+
+		m_globalIlluminationDeg += direction < 0
+			? -1
+			: 1;
+
+		if (m_globalIlluminationDeg < 0)
+			m_globalIlluminationDeg = 360;
+
+		if (m_globalIlluminationDeg > 360)
+			m_globalIlluminationDeg = 0;
+
+		break;
+
+		// =====================================================
+		// [4] CONFIGURE
+		// =====================================================
+	case GlobalShellRow::Configure:
+
+		// A/D has no meaning here.
+		break;
+
+
+	default:
+		break;
+	}
+}
