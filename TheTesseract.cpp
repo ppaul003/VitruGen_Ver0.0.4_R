@@ -320,7 +320,7 @@ void Tesseract::processNavigationRequest() {
 				DomainTransitionPhase::EXIT_CAMERA;
 
 			if (m_services.camera) {
-				m_services.camera->beginTransitionToMenu(1.25f);
+				m_services.camera->beginTransitionToMenu(kGrid3DCamTransDuration);
 			}
 			else {
 				// No camera service:
@@ -385,7 +385,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 			DomainTransitionPhase::ENTER_CAMERA;
 
 		if (m_services.camera) 
-			m_services.camera->beginTransitionToStandard3D(1.25f);
+			m_services.camera->beginTransitionToStandard3D(kGrid3DCamTransDuration);
 		
 		return;
 

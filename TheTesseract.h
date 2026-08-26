@@ -66,6 +66,8 @@ private:
 	void activateCartridge(IWorkspace* workspace, const char* name);
 
 private:
+	static constexpr float kGrid3DCamTransDuration = 1.0f;
+
 	WorkspaceServices m_services;
 	DiagnosticIdle m_diagnosticIdle;
 

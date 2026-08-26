@@ -22,10 +22,10 @@ static float lerpCameraFloat(float a, float b, float t) {
 }
 
 CameraProcessor::CameraProcessor() :
-	m_camera_trans{ 0.0f, 0.0f, -5.0f },
-	m_camera_rot{ 0.0f, 0.0f, 0.0f },
-	m_camera_trans_lag{ 0.0f, 0.0f, -5.0f },
-	m_camera_rot_lag{ 0.0f, 0.0f, 0.0f },
+	m_camera_trans{ 1.65f, 0.0f, -8.0f },
+	m_camera_rot{ 18.0f, 0.0f, 0.0f },
+	m_camera_trans_lag{ 1.65f, 0.0f, -8.0f },
+	m_camera_rot_lag{ 18.0f, 0.0f, 0.0f },
 	m_menuCubeRotation(0.0f) {}
 
 CameraProcessor::~CameraProcessor() {}
@@ -382,7 +382,9 @@ bool CameraProcessor::orbitEnabled() const {
 	// Checkpoint 1:
 	// Only the SINGLE_PARTICLE workplane-lock mode disables orbit.
 	// Everything else behaves like the old camera.
-	return !m_poseTransitionActive && !isWorkplaneLocked();
+	return !m_poseTransitionActive &&
+		m_behaviorMode != CAM_MENU_PREVIEW &&
+		!isWorkplaneLocked();
 }
 
 bool CameraProcessor::isSingleParticleCamera() const {

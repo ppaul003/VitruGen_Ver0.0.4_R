@@ -120,7 +120,7 @@ private:
 	static constexpr float kSingleParticleOrbitMinScale = 0.22f;
 	static constexpr float kInertia = 0.1f;
 
-	CameraBehaviorMode m_behaviorMode = CAM_STANDARD_3D_ORBIT;
+	CameraBehaviorMode m_behaviorMode = CAM_MENU_PREVIEW;
 
 	bool m_poseTransitionActive = false;
 

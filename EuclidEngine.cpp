@@ -630,6 +630,17 @@ void EuclidEngine::onDisplay() {
 }
 
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
+	// ---------------------------------------------------------
+	// Layer 0 / domain transitions are keyboard-driven.
+	//
+	// Match GOLD behavior:
+	//     no orbit
+	//     no wheel zoom
+	//     no workspace mouse interaction
+	// ---------------------------------------------------------
+	if (m_arbiter.isGlobalShell() || m_tesseract.domainTransitionActive())
+		return;
+
 	const bool isWheel = button == 3 || button == 4;
 	const TheArbiter::ArbiterResult result =
 		m_arbiter.routeMouseButton(button, state, x, y);
@@ -689,7 +700,9 @@ void EuclidEngine::onMotion(int x, int y) {
 }
 
 void EuclidEngine::onPassiveMotion(int x, int y) {
-	
+	if (m_arbiter.isGlobalShell() || 
+		m_tesseract.domainTransitionActive()) return;
+
 	const TheArbiter::ArbiterResult result =
 		m_arbiter.routePointerMove(x, y);
 
