@@ -1419,6 +1419,21 @@ bool SingleParticleWorkspace::handleMenuCommand(
 	return true;
 }
 
+SingleParticleWorkspace::OverlapPreviewStatus 
+SingleParticleWorkspace::runtimeOverlapStatus() const {
+
+	if (isSPOverlapPreviewActive())
+		return OverlapPreviewStatus::Active;
+
+	const bool outsideCage =
+		(m_spOverlapPreviewSensorReady && m_spOverlapPreviewUnsafeCount > 0) ||
+		(m_spOverlapPreviewMirrorRequired && m_spMirrorOverlapPreviewSensorReady &&
+			m_spMirrorOverlapPreviewUnsafeCount > 0);
+
+	if (outsideCage) return OverlapPreviewStatus::OutsideCage;
+	return OverlapPreviewStatus::PositionInNode2;
+}
+
 WorkspacePresentation SingleParticleWorkspace::buildLayer1Presentation() const {
 	WorkspacePresentation p;
 	p.panelVisible = true;
@@ -1474,6 +1489,7 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer2Presentation() const {
 
 WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 	WorkspacePresentation p;
+	p.runtimeStatus = buildRuntimeStatus();
 	p.panelVisible = m_subLayerPanelOpen;
 	p.workspaceName = "SINGLE_PARTICLE MODE";
 	p.layerLabel = "LAYER 3 -> SIMULATION RUN (SINGLE_PARTICLE)";
@@ -1531,6 +1547,72 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 
 WorkspacePresentation SingleParticleWorkspace::buildLayer1TransitionPresentation() const {
 	return buildLayer1Presentation();
+}
+
+WorkspaceRuntimeStatus SingleParticleWorkspace::buildRuntimeStatus() const {
+
+	WorkspaceRuntimeStatus status;
+	status.visible = true;
+
+	status.titleLine =
+		"LAYER 3 -> SIMULATION RUN "
+		"(SINGLE_PARTICLE)";
+
+	status.contextLine =
+		string("SINGLE_PARTICLE: ") +
+		runtimeSubLayerName();
+
+	status.objectLine =
+		buildRuntimeObjectLine();
+
+	status.helpLine =
+		buildRuntimeHelpLine();
+
+	// ---------------------------------------------------------
+	// GOLD expands the status HUD during shared-volume
+	// overlap preview in Node_1 / Node_2.
+	// ---------------------------------------------------------
+	status.auxiliaryVisible = m_subLayer == 
+		SubLayer::VolumeRender &&
+		hasInjectionVoxelSelected() &&
+		(m_assemblyNode == AssemblyNode::EditObject ||
+			m_assemblyNode == AssemblyNode::OffsetObject);
+
+	if (status.auxiliaryVisible) {
+
+		const OverlapPreviewStatus overlap =
+			runtimeOverlapStatus();
+
+		status.auxiliaryStatusLine =
+			string("OVERLAP PREVIEW { ") +
+			overlapStatusName(overlap) +
+			" }";
+
+		switch (overlap) {
+
+		case OverlapPreviewStatus::Active:
+			status.auxiliaryStatusTone = WorkspaceStatusTone::Ready;
+			break;
+
+		case OverlapPreviewStatus::OutsideCage:
+			status.auxiliaryStatusTone = WorkspaceStatusTone::Caution;
+			break;
+
+		default:
+			status.auxiliaryStatusTone = WorkspaceStatusTone::Neutral;
+			break;
+		}
+
+		status.auxiliaryReferenceLine =
+			"REFERENCE FRAME { VOLUME_0 }";
+
+		status.auxiliaryTargetLine =
+			string("EDIT TARGET { ") +
+			editTargetName() +
+			" }";
+	}
+
+	return status;
 }
 
 void SingleParticleWorkspace::appendReferencePanel(WorkspacePresentation& p) const {
@@ -1818,7 +1900,260 @@ const char* SingleParticleWorkspace::injectionVoxelName() const {
 		? names[value] : "NONE";
 }
 
-std::size_t SingleParticleWorkspace::getVolumeBytes() const {
+const char* SingleParticleWorkspace::runtimeSubLayerName() const {
+	switch (m_subLayer) {
+
+	case SubLayer::Reference:
+		return "SUB_LAYER_0 COLLISION SETUP";
+
+	case SubLayer::ShapeEdit:
+		return "SUB_LAYER_1 RENDERING SETUP";
+
+	case SubLayer::VolumeRender:
+		return "SUB_LAYER_2 MESH / VOLUME PREVIEW AND EDIT";
+
+	case SubLayer::MarchingCubes:
+		return "SUB_LAYER_3 MARCHING CUBES";
+
+	default:
+		return "UNKNOWN_SINGLE_PARTICLE_SUB_LAYER";
+	}
+}
+
+const char* SingleParticleWorkspace::objectTransformModeName() const {
+	return m_objectTransformMode == ObjectTransformMode::Rotation
+		? "Rotation"
+		: "Scale";
+}
+
+const char* SingleParticleWorkspace::objectEditModeName() const {
+	switch (m_objectEditMode) {
+
+	case ObjectEditMode::ScaleZ:
+		return "Scale z-axis";
+
+	case ObjectEditMode::ScaleY:
+		return "Scale y-axis";
+
+	case ObjectEditMode::ScaleX:
+		return "Scale x-axis";
+
+	default:
+		return "Scale whole object";
+	}
+}
+
+const char* SingleParticleWorkspace::objectRotationModeName() const {
+	switch (m_objectRotationMode) {
+
+	case ObjectRotationMode::Yaw:
+		return "Yaw";
+
+	case ObjectRotationMode::Roll:
+		return "Roll";
+
+	default:
+		return "Pitch";
+	}
+}
+
+const char* SingleParticleWorkspace::offsetVectorName() const {
+	switch (m_offsetVector) {
+
+	case OffsetVector::Y:
+		return "Y-VECTOR";
+
+	case OffsetVector::Z:
+		return "Z-VECTOR";
+
+	default:
+		return "X-VECTOR";
+	}
+}
+
+const char* SingleParticleWorkspace::editTargetName() const {
+	return m_editTarget == EditTarget::Volume1
+		? "VOLUME_1"
+		: "VOLUME_0";
+}
+
+const char* SingleParticleWorkspace::overlapStatusName(OverlapPreviewStatus status) const {
+	switch (status) {
+
+	case OverlapPreviewStatus::Active:
+		return "ACTIVE";
+
+	case OverlapPreviewStatus::OutsideCage:
+		return "OUTSIDE CAGE";
+
+	default:
+		return "POSITION IN NODE_2";
+	}
+}
+
+string SingleParticleWorkspace::buildRuntimeObjectLine() const {
+	if (m_subLayer != SubLayer::VolumeRender) {
+		return "OBJECT: SINGLE_PARTICLE";
+	}
+
+	char line[512];
+
+	const VolumeObjectState& state =
+		getActiveVolumeState();
+
+	// =========================================================
+	// NODE 2 — OFFSET
+	// =========================================================
+	if (m_assemblyNode == AssemblyNode::OffsetObject) {
+
+		const char* boundary =
+			!m_volumeBoundarySensorReady
+			? "CHECKING"
+			: (m_volumeBoundaryUnsafeCount == 0 ? "SAFE": "CONTACT");
+
+		snprintf(
+			line,
+			sizeof(line),
+
+			"OBJECT: %s | "
+			"OFFSET %.3f/%.3f/%.3f | "
+			"VECTOR %s | "
+			"INC %.3g | "
+			"BOUNDARY %s:%u",
+
+			volumePrimitiveName(),
+
+			state.offsetX,
+			state.offsetY,
+			state.offsetZ,
+
+			offsetVectorName(),
+
+			m_offsetIncrement,
+
+			boundary,
+			m_volumeBoundaryUnsafeCount
+		);
+
+		return line;
+	}
+
+	// =========================================================
+	// NODE 0 / NODE 1 / NODE 3
+	// =========================================================
+	snprintf(
+		line,
+		sizeof(line),
+
+		"OBJECT: %s | "
+		"MODE: %s | "
+		"SCALE %s %.2f/%.2f/%.2f/%.2f | "
+		"ROT %s %.0f/%.0f/%.0f | "
+		"Deg %d",
+
+		volumePrimitiveName(),
+		objectTransformModeName(),
+
+		objectEditModeName(),
+
+		state.scaleWhole,
+		state.scaleX,
+		state.scaleY,
+		state.scaleZ,
+
+		objectRotationModeName(),
+
+		state.pitchDeg,
+		state.yawDeg,
+		state.rollDeg,
+
+		rotationIncrementDegrees()
+	);
+
+	return line;
+}
+
+string SingleParticleWorkspace::buildRuntimeHelpLine() const {
+	if (m_subLayer == SubLayer::Reference) {
+
+		if (m_subLayerPanelOpen) {
+
+			return
+				"TAB: Hide panel    "
+				"W/S: Select item    "
+				"A/D: Change value    "
+				"E: Activate    "
+				"Q: Back";
+		}
+
+		if (m_selectedParticle) {
+
+			return
+				"E: Deselect particle    "
+				"TAB: Collision setup panel    "
+				"Q: Back";
+		}
+
+		if (m_selectionArmed) {
+
+			return
+				"W/S: Move workplane    "
+				"LMB: Select particle    "
+				"E: Cancel selection mode    "
+				"Q: Back";
+		}
+
+		return
+			"E: Arm particle selection    "
+			"Q: Back";
+	}
+
+	if (m_subLayer == SubLayer::ShapeEdit) {
+
+		if (m_subLayerPanelOpen) {
+
+			return
+				"TAB: Hide panel    "
+				"W/S: Select item    "
+				"A/D: Change value    "
+				"E: Activate    "
+				"Q: Back";
+		}
+
+		return
+			"TAB: Rendering setup panel    "
+			"Q: Collision setup";
+	}
+
+	if (m_subLayer == SubLayer::VolumeRender) {
+
+		return
+			"TAB: Toggle sub-layer panel    "
+			"E: Advance    "
+			"Q: Back    "
+			"RMB: Menu";
+	}
+
+	return
+		"E: Advance sub-layer    "
+		"Q: Back    "
+		"RMB: Menu";
+}
+
+int SingleParticleWorkspace::rotationIncrementDegrees() const {
+
+	static constexpr int steps[] = { 1, 20, 45, 90, 180 };
+
+	const int count = static_cast<int>(sizeof(steps) /
+		sizeof(steps[0]));
+
+	const int index =
+		(std::max)(0, std::min(count - 1, m_rotationIncrementIndex));
+
+	return steps[index];
+}
+
+size_t SingleParticleWorkspace::getVolumeBytes() const {
 	return static_cast<std::size_t>(m_volumeSize.x) *
 		static_cast<std::size_t>(m_volumeSize.y) *
 		static_cast<std::size_t>(m_volumeSize.z) * sizeof(float);

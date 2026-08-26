@@ -487,6 +487,201 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 	}
 }
 
+void ViewPort::drawRuntimeStatusPanel(const WorkspaceRuntimeStatus& status) {
+	if (!status.visible) return;
+
+	// ---------------------------------------------------------
+	// GOLD Ver004 runtime-status geometry.
+	// ---------------------------------------------------------
+	const float panelLeft = 24.0f;
+	const float panelTop = 24.0f;
+	const float panelBottom = 184.0f;
+
+	const float viewportRight =
+		(std::max)(panelLeft + 640.0f,
+			static_cast<float>(m_windowWidth) - 24.0f);
+
+	const float normalPanelRight =
+		(std::min)(1120.0f, viewportRight);
+
+	const float panelRight =
+		status.auxiliaryVisible
+		? viewportRight
+		: normalPanelRight;
+
+	// ---------------------------------------------------------
+	// Optional right-side detail column.
+	// ---------------------------------------------------------
+	const float availableWidth = panelRight - 760.0f;
+
+	const float auxiliaryWidth =
+		(std::min)(520.0f, 
+			(std::max)(360.0f, availableWidth));
+
+	const float auxiliaryDividerX = panelRight - auxiliaryWidth;
+	const float auxiliaryTextX = auxiliaryDividerX + 24.0f;
+
+	// ---------------------------------------------------------
+	// Presentation state.
+	// ---------------------------------------------------------
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_TEXTURE_2D);
+
+	glUseProgram(0);
+
+	glEnable(GL_BLEND);
+
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+
+	// ---------------------------------------------------------
+	// Main background.
+	// ---------------------------------------------------------
+	glColor4f(0.02f, 0.04f, 0.06f, 0.55f);
+
+	glBegin(GL_QUADS);
+
+	glVertex2f(panelLeft, panelTop);
+	glVertex2f(panelRight, panelTop);
+	glVertex2f(panelRight, panelBottom);
+	glVertex2f(panelLeft, panelBottom);
+
+	glEnd();
+
+	// ---------------------------------------------------------
+	// Auxiliary background.
+	// ---------------------------------------------------------
+	if (status.auxiliaryVisible) {
+
+		glColor4f(0.01f, 0.02f, 0.04f, 0.30f);
+		glBegin(GL_QUADS);
+
+		glVertex2f(
+			auxiliaryDividerX,
+			panelTop
+		);
+
+		glVertex2f(
+			panelRight,
+			panelTop
+		);
+
+		glVertex2f(
+			panelRight,
+			panelBottom
+		);
+
+		glVertex2f(
+			auxiliaryDividerX,
+			panelBottom
+		);
+
+		glEnd();
+
+		glLineWidth(1.0f);
+		glColor4f(0.55f, 0.72f, 0.82f, 0.52f);
+
+		glBegin(GL_LINES);
+
+		glVertex2f(
+			auxiliaryDividerX,
+			panelTop + 16.0f
+		);
+
+		glVertex2f(
+			auxiliaryDividerX,
+			panelBottom - 16.0f
+		);
+
+		glEnd();
+	}
+
+	// ---------------------------------------------------------
+	// Main runtime column.
+	// ---------------------------------------------------------
+	glColor3f(0.85f, 0.95f, 1.0f);
+
+	drawText2D(
+		40.0f,
+		52.0f,
+		status.titleLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		40.0f,
+		82.0f,
+		status.contextLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		40.0f,
+		108.0f,
+		status.objectLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		40.0f,
+		134.0f,
+		status.helpLine.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Optional auxiliary column.
+	// ---------------------------------------------------------
+	if (status.auxiliaryVisible) {
+
+		switch (status.auxiliaryStatusTone) {
+
+		case WorkspaceStatusTone::Ready:
+			glColor3f(0.28f, 1.00f, 0.42f);
+			break;
+
+		case WorkspaceStatusTone::Caution:
+			glColor3f(1.00f, 0.55f, 0.08f);
+			break;
+
+		default:
+			glColor3f(0.56f, 0.64f, 0.68f);
+			break;
+		}
+
+		drawText2D(
+			auxiliaryTextX,
+			64.0f,
+			status
+			.auxiliaryStatusLine
+			.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		glColor3f(0.85f, 0.95f, 1.0f);
+
+		drawText2D(
+			auxiliaryTextX,
+			90.0f,
+			status
+			.auxiliaryReferenceLine
+			.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawText2D(
+			auxiliaryTextX,
+			116.0f,
+			status
+			.auxiliaryTargetLine
+			.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+	}
+}
+
 // =============================================================================
 // FOOTER
 // =============================================================================
@@ -536,10 +731,23 @@ void ViewPort::drawOverlay(const WorkspacePresentation& presentation) {
 	if (m_panelSlide > 0.0f) {
 
 		drawPanelBackground();
-		drawPresentationHeader(presentation);
+
+		// ---------------------------------------------------------
+		// Layer-3 runtime HUD replaces the ordinary large-panel
+		// header while the optional controls remain underneath.
+		// ---------------------------------------------------------
+		if (!presentation.runtimeStatus.visible)
+			drawPresentationHeader(presentation);
+		
 		drawPresentationSections(presentation);
 		drawPresentationFooter(presentation);
 	}
+
+	// ---------------------------------------------------------
+	// GOLD-style runtime status is independent of whether the
+	// sub-layer control panel is open.
+	// ---------------------------------------------------------
+	drawRuntimeStatusPanel(presentation.runtimeStatus);
 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);

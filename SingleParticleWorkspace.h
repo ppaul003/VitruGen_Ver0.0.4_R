@@ -378,6 +378,8 @@ public:
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
 	WorkspacePresentation buildLayer1TransitionPresentation() const;
 
+	WorkspaceRuntimeStatus buildRuntimeStatus() const;
+
 private:
 	bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
@@ -391,6 +393,18 @@ private:
 	const char* collisionShapeName() const;
 	const char* volumePrimitiveName() const;
 	const char* injectionVoxelName() const;
+	const char* runtimeSubLayerName() const;
+	const char* objectTransformModeName() const;
+	const char* objectEditModeName() const;
+	const char* objectRotationModeName() const;
+	const char* offsetVectorName() const;
+	const char* editTargetName() const;
+	const char* overlapStatusName(OverlapPreviewStatus status) const;
+
+	std::string buildRuntimeObjectLine() const;
+	std::string buildRuntimeHelpLine() const;
+
+	int rotationIncrementDegrees() const;
 
 	void moveLayer1Cursor(int direction);
 	void adjustLayer1Value(int direction);
@@ -415,6 +429,8 @@ private:
 	void enterMarchingCubes(WorkspaceServices& services);
 	bool trySelectParticle(int x, int y);
 	void updateHover(int x, int y);
+	
+	OverlapPreviewStatus runtimeOverlapStatus() const;
 
 	WorkspacePresentation buildLayer1Presentation() const;
 	WorkspacePresentation buildLayer2Presentation() const;
@@ -509,9 +525,7 @@ private:
 	void releaseSPVolumeBoundarySensor();
 	void markSPVolumeBoundarySafe();
 
-	bool isSPVolumeBoundarySafe() const {
-		return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0;
-	}
+	bool isSPVolumeBoundarySafe() const { return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0; }
 
 	bool isSPOverlapPreviewActive() const {
 		return m_spOverlapPreviewSensorReady &&

@@ -9,8 +9,9 @@ enum class WorkspaceStatusTone {
 	Neutral = 0,
 	Ready,
 	Warning,
+	Transition,
 
-	Transition
+	Caution
 };
 
 struct WorkspacePanelRow {
@@ -28,6 +29,28 @@ struct WorkspacePanelSection {
 
 	std::string heading;
 	std::vector<WorkspacePanelRow> rows;
+};
+
+struct WorkspaceRuntimeStatus {
+	bool visible = false;
+
+	// Main GOLD-style runtime column
+	std::string titleLine;
+	std::string contextLine;
+	std::string objectLine;
+	std::string helpLine;
+
+	// Optional right-side detail column
+	bool auxiliaryVisible = false;
+
+	std::string auxiliaryStatusLine;
+
+	WorkspaceStatusTone auxiliaryStatusTone =
+		WorkspaceStatusTone::Neutral;
+
+	std::string auxiliaryReferenceLine;
+	std::string auxiliaryTargetLine;
+
 };
 
 struct WorkspacePresentation {
@@ -50,6 +73,8 @@ struct WorkspacePresentation {
 
 	std::string footerLine1;
 	std::string footerLine2;
+
+	WorkspaceRuntimeStatus runtimeStatus;
 };
 
 #endif

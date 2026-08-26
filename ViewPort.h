@@ -91,6 +91,7 @@ private:
 	void drawPresentationHeader(const WorkspacePresentation& presentation);
 	void drawPresentationSections(const WorkspacePresentation& presentation);
 	void drawPresentationFooter(const WorkspacePresentation& presentation);
+	void drawRuntimeStatusPanel(const WorkspaceRuntimeStatus& status);
 
 	// ---------------------------------------------------------
 	// Generic row rendering.
