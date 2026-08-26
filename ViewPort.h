@@ -69,6 +69,9 @@ public:
 	int getHeight() const { return m_windowHeight; }
 	float getAspect() const;
 
+	void updateSubLayerPanelAnimation(bool visible);
+	void drawSubLayerPresentation(const WorkspacePresentation& presentation);
+
 private:
 	// =========================================================
 	// GENERIC INTERNAL HELPERS
@@ -144,6 +147,8 @@ private:
 	// 0.0 = fully hidden
 	// =========================================================
 	float m_panelSlide = 1.0f;
+	float m_subLayerPanelSlide = 0.0f;
+
 };
 
 

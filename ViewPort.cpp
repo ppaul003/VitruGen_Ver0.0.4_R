@@ -723,34 +723,306 @@ void ViewPort::drawPresentationFooter(const WorkspacePresentation& presentation)
 // =============================================================================
 void ViewPort::drawOverlay(const WorkspacePresentation& presentation) {
 
-	updatePanelAnimation(presentation.panelVisible);
-	beginOverlay2D();
+	const bool subLayerPanel = presentation.panelLayout == 
+		WorkspacePanelLayout::SubLayer;
 
+	updatePanelAnimation(presentation.panelVisible && !subLayerPanel);
+	updateSubLayerPanelAnimation(presentation.panelVisible && subLayerPanel);
+
+	beginOverlay2D();
 	drawWorkspaceFrame(0.30f, nullptr);
 
-	if (m_panelSlide > 0.0f) {
-
-		drawPanelBackground();
-
-		// ---------------------------------------------------------
-		// Layer-3 runtime HUD replaces the ordinary large-panel
-		// header while the optional controls remain underneath.
-		// ---------------------------------------------------------
-		if (!presentation.runtimeStatus.visible)
-			drawPresentationHeader(presentation);
-		
-		drawPresentationSections(presentation);
-		drawPresentationFooter(presentation);
-	}
-
 	// ---------------------------------------------------------
-	// GOLD-style runtime status is independent of whether the
-	// sub-layer control panel is open.
+	// Layer-3 runtime HUD.
+	//
+	// GOLD draws this BEFORE the Sub-Layer control panel.
+	// Therefore, when TAB opens the Sub-Layer panel, the panel
+	// physically overlays the lower-left portion of the HUD.
 	// ---------------------------------------------------------
 	drawRuntimeStatusPanel(presentation.runtimeStatus);
 
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
+	if (subLayerPanel) {
+
+		if (m_subLayerPanelSlide > 0.0f)
+			drawSubLayerPresentation(presentation);
+	}
+	else {
+
+		if (m_panelSlide > 0.0f) {
+
+			drawPanelBackground();
+			drawPresentationHeader(presentation);
+			drawPresentationSections(presentation);
+			drawPresentationFooter(presentation);
+		}
+	}
 
 	endOverlay2D();
+}
+
+void ViewPort::updateSubLayerPanelAnimation(bool visible) {
+
+	const float target = visible
+		? 1.0f
+		: 0.0f;
+
+	m_subLayerPanelSlide +=
+		(target - m_subLayerPanelSlide) * 0.18f;
+
+	if (m_subLayerPanelSlide < 0.001f)
+		m_subLayerPanelSlide = 0.0f;
+
+	if (m_subLayerPanelSlide > 0.999f)
+		m_subLayerPanelSlide = 1.0f;
+}
+
+void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentation) {
+
+	const float alpha = m_subLayerPanelSlide;
+
+	// ---------------------------------------------------------
+	// GOLD Ver004 Sub-Layer geometry.
+	// ---------------------------------------------------------
+	const float panelWidth = 650.0f;
+	const float x0 = m_margin;
+	const float y0Visible = 170.0f;
+
+	const float panelHeight =
+		static_cast<float>(m_windowHeight) -
+		y0Visible - m_margin;
+
+	const float hiddenOffsetY = panelHeight +
+		m_margin + 24.0f;
+
+	const float y0 = y0Visible +
+		hiddenOffsetY * (1.0f - alpha);
+
+	const float x1 = x0 + panelWidth;
+	const float y1 = y0 + panelHeight;
+
+	const float sectionX = x0 + 54.0f;
+	const float labelX = x0 + 84.0f;
+
+	const float dividerX0 = x0 + 42.0f;
+	const float dividerX1 = x1 - 42.0f;
+
+	// ---------------------------------------------------------
+	// Background.
+	// ---------------------------------------------------------
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_TEXTURE_2D);
+
+	glUseProgram(0);
+
+	glEnable(GL_BLEND);
+
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+
+	glColor4f(0.02f, 0.04f, 0.06f, 0.80f * alpha);
+	glBegin(GL_QUADS);
+
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+
+	glEnd();
+
+	// ---------------------------------------------------------
+	// Border.
+	// ---------------------------------------------------------
+	glLineWidth(1.5f);
+	glColor4f(1.0f, 1.0f, 1.0f,0.95f * alpha);
+
+	glBegin(GL_LINE_LOOP);
+
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+
+	glEnd();
+
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+	drawText2D(
+		sectionX,
+		y0 + 40.0f,
+		presentation.workspaceName.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawText2D(
+		sectionX,
+		y0 + 70.0f,
+		presentation.subLayerLabel.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	auto drawDivider = [&](float y) {
+
+		glColor4f(0.85f, 0.95f, 1.0f, 0.45f * alpha);
+		glBegin(GL_LINES);
+
+		glVertex2f(dividerX0, y);
+		glVertex2f(dividerX1, y);
+
+		glEnd();
+	};
+
+	auto drawSubRow = [&](float y, const WorkspacePanelRow& row) {
+		
+		if (row.selected) {
+
+			glColor4f(0.45f, 1.0f, 0.65f, alpha);
+
+			drawText2D(
+				labelX - 22.0f,
+				y,
+				">",
+				GLUT_BITMAP_HELVETICA_18
+			);
+		}
+		else {
+			
+			glColor4f(0.72f, 0.78f, 0.82f, alpha);
+		}
+
+		string line = row.label;
+
+		if (!row.value.empty()) {
+
+			line += " { ";
+			line += row.value;
+			line += " }";
+		}
+
+		drawText2D(
+			labelX,
+			y,
+			line.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+	};
+
+	drawDivider(y0 + 105.0f);
+
+	// =========================================================
+	// SECTION 0 — Particle Object
+	// =========================================================
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+	drawText2D(
+		sectionX,
+		y0 + 145.0f,
+		presentation.sections[0].heading.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawSubRow(
+		y0 + 185.0f,
+		presentation.sections[0].rows[0]
+	);
+
+	drawDivider(y0 + 225.0f);
+
+	// =========================================================
+	// SECTION 1 — Collision Proxy
+	// =========================================================
+	drawText2D(
+		sectionX,
+		y0 + 265.0f,
+		presentation.sections[1].heading.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawSubRow(
+		y0 + 307.0f,
+		presentation.sections[1].rows[0]
+	);
+
+	const bool sphereAvailable =
+		presentation.sections[1].rows[0].value == "SPHERE";
+
+	if (sphereAvailable) {
+
+		glColor4f(0.45f, 1.0f, 0.65f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 347.0f,
+			"SPHERE COLLISION PROXY AVAILABLE",
+			GLUT_BITMAP_HELVETICA_12
+		);
+	}
+	else {
+
+		glColor4f(0.72f, 0.78f, 0.82f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 347.0f,
+			"SELECTED COLLISION PROXY RESERVED",
+			GLUT_BITMAP_HELVETICA_12
+		);
+	}
+
+	drawDivider(y0 + 385.0f);
+
+	// =========================================================
+	// SECTION 2 — Static Particle Asset
+	// =========================================================
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+	drawText2D(
+		sectionX,
+		y0 + 425.0f,
+		presentation.sections[2]
+		.heading.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawSubRow(
+		y0 + 467.0f,
+		presentation.sections[2].rows[0]
+	);
+
+	drawSubRow(
+		y0 + 509.0f,
+		presentation.sections[2].rows[1]
+	);
+
+	drawDivider(y0 + 544.0f);
+
+	// =========================================================
+	// SECTION 3 — Next Sub-Layer
+	// =========================================================
+	drawText2D(
+		sectionX,
+		y0 + 584.0f,
+		presentation.sections[3]
+		.heading.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	drawSubRow(
+		y0 + 626.0f,
+		presentation.sections[3].rows[0]
+	);
+
+	drawDivider(y1 - 92.0f);
+	glColor4f(0.75f, 0.75f, 0.75f, alpha);
+
+	drawText2D(
+		sectionX,
+		y1 - 58.0f,
+		"W/S: Select    A/D: Change value    "
+		"E: Activate    TAB: Hide    Q: Back",
+		GLUT_BITMAP_HELVETICA_12
+	);
+
+	glLineWidth(1.0f);
 }

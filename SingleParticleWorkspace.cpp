@@ -294,8 +294,29 @@ bool SingleParticleWorkspace::handleInput(
 	if (services.arbiter->isWorkspaceConfiguration())
 		return handleLayer2Input(input, services);
 
-	if (services.arbiter->isActiveWorkspace())
-		return handleLayer3Input(input, services);
+	if (services.arbiter->isActiveWorkspace()) {
+
+		const bool handled = handleLayer3Input(input, services);
+
+		// ---------------------------------------------------------
+		// Layer-3 input can change camera-relevant workspace state:
+		//
+		//     selection armed
+		//     particle selected
+		//     sub-layer panel visibility
+		//     active sub-layer
+		//     assembly mode
+		//
+		// Re-resolve the workspace camera after every successfully
+		// handled Layer-3 event.
+		//
+		// This is the cartridge-local equivalent of GOLD's old
+		// syncCameraBehaviorFromArbiter() pass.
+		// ---------------------------------------------------------
+		if (handled) updateCameraIntent(services);
+
+		return handled;
+	}
 
 	return false;
 }
@@ -1493,13 +1514,13 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 	p.panelVisible = m_subLayerPanelOpen;
 	p.workspaceName = "SINGLE_PARTICLE MODE";
 	p.layerLabel = "LAYER 3 -> SIMULATION RUN (SINGLE_PARTICLE)";
+	p.panelLayout = WorkspacePanelLayout::SubLayer;
 	p.subLayerLabel = subLayerName();
 
 	if (m_subLayer == SubLayer::Reference) {
 		if (m_subLayerPanelOpen) appendReferencePanel(p);
-		if (m_selectedParticle)
-			p.statusLine = "PARTICLE SELECTED";
-		else if (m_selectionArmed)
+		
+		if (m_selectionArmed)
 			p.statusLine = "PARTICLE SELECTION ARMED";
 		else
 			p.statusLine = "E: Arm particle selection";
@@ -1623,33 +1644,33 @@ void SingleParticleWorkspace::appendReferencePanel(WorkspacePresentation& p) con
 
 	WorkspacePanelSection collision;
 	collision.heading = "Collision Proxy:";
-	collision.rows.push_back(makeRow("[1] COLLISION SHAPE", collisionShapeName(),
+	collision.rows.push_back(makeRow("[1]: COLLISION SHAPE", collisionShapeName(),
 		m_activePanelItem == 0));
 	p.sections.push_back(collision);
 
 	WorkspacePanelSection assets;
 	assets.heading = "Static Particle Asset:";
-	assets.rows.push_back(makeRow("[2] LOAD STATIC PARTICLE", "", m_activePanelItem == 1));
-	assets.rows.push_back(makeRow("[3] SAVE ACTIVE PARTICLE", "", m_activePanelItem == 2));
+	assets.rows.push_back(makeRow("[2]: LOAD STATIC PARTICLE", "", m_activePanelItem == 1));
+	assets.rows.push_back(makeRow("[3]: SAVE ACTIVE PARTICLE", "", m_activePanelItem == 2));
 	p.sections.push_back(assets);
 
 	WorkspacePanelSection next;
 	next.heading = "Next Sub-Layer:";
-	next.rows.push_back(makeRow("[4] RENDERING SETUP", "", m_activePanelItem == 3));
+	next.rows.push_back(makeRow("[4]: RENDERING SETUP", "", m_activePanelItem == 3));
 	p.sections.push_back(next);
 }
 
 void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 	WorkspacePanelSection render;
 	render.heading = "Render Source:";
-	render.rows.push_back(makeRow("[1] RENDER SOURCE",
+	render.rows.push_back(makeRow("[1]: RENDER SOURCE",
 		m_particleRenderMode == ParticleRenderMode::Mesh ? "MESH" : "PARTICLE",
 		m_activePanelItem == 0));
 	p.sections.push_back(render);
 
 	WorkspacePanelSection bound;
 	bound.heading = "Mesh Scale Bound:";
-	bound.rows.push_back(makeRow("[2] MESH BOUND",
+	bound.rows.push_back(makeRow("[2]: MESH BOUND",
 		m_meshBoundMode == MeshBoundMode::Fill ? "FILL" : "DEFAULT",
 		m_activePanelItem == 1));
 	p.sections.push_back(bound);
@@ -1659,9 +1680,9 @@ void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 	const char* display = m_displayMode == DisplayMode::Wireframe
 		? "WIREFRAME" : m_displayMode == DisplayMode::RenderAndCollision
 		? "RENDER + COLLISION" : "RENDER";
-	debug.rows.push_back(makeRow("[3] DISPLAY MODE", display,
+	debug.rows.push_back(makeRow("[3]: DISPLAY MODE", display,
 		m_activePanelItem == 2));
-	debug.rows.push_back(makeRow("[4] RENDER CAGE",
+	debug.rows.push_back(makeRow("[4]: RENDER CAGE",
 		m_renderCageVisible ? "ON" : "OFF", m_activePanelItem == 3));
 	p.sections.push_back(debug);
 
@@ -1696,18 +1717,18 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 		p.sections.push_back(report);
 		WorkspacePanelSection output;
 		output.heading = "Output:";
-		output.rows.push_back(makeRow("[1] SAVE STATIC PARTICLE", "",
+		output.rows.push_back(makeRow("[1]: SAVE STATIC PARTICLE", "",
 			m_activePanelItem == 0));
-		output.rows.push_back(makeRow("[2] SAVE STATIC PARTICLE AS", "",
+		output.rows.push_back(makeRow("[2]: SAVE STATIC PARTICLE AS", "",
 			m_activePanelItem == 1));
-		output.rows.push_back(makeRow("[3] EXPORT .OBJ", "",
+		output.rows.push_back(makeRow("[3]: EXPORT .OBJ", "",
 			m_activePanelItem == 2));
 		p.sections.push_back(output);
 		WorkspacePanelSection back;
 		back.heading = "Previous / Next Sub-layer:";
-		back.rows.push_back(makeRow("[4] To Sub-Layer_2 Preview", "",
+		back.rows.push_back(makeRow("[4]: To Sub-Layer_2 Preview", "",
 			m_activePanelItem == 3));
-		back.rows.push_back(makeRow("[5] RETURN TO SUB-LAYER_0", "",
+		back.rows.push_back(makeRow("[5]: RETURN TO SUB-LAYER_0", "",
 			m_activePanelItem == 4));
 		p.sections.push_back(back);
 		return;
@@ -1716,13 +1737,13 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 	if (m_assemblyNode == AssemblyNode::Preview) {
 		WorkspacePanelSection injection;
 		injection.heading = "Volume Injection:";
-		injection.rows.push_back(makeRow("[1] Injection Voxels",
+		injection.rows.push_back(makeRow("[1]: Injection Voxels",
 			injectionVoxelName(), m_activePanelItem == 0));
 		p.sections.push_back(injection);
 		WorkspacePanelSection next;
 		next.heading = "Next Node / Sub-Layer:";
-		next.rows.push_back(makeRow("[2] Edit Object", "", m_activePanelItem == 1));
-		next.rows.push_back(makeRow("[3] Run MC_Mode", "", m_activePanelItem == 2));
+		next.rows.push_back(makeRow("[2]: Edit Object", "", m_activePanelItem == 1));
+		next.rows.push_back(makeRow("[3]: Run MC_Mode", "", m_activePanelItem == 2));
 		p.sections.push_back(next);
 		return;
 	}
@@ -1734,9 +1755,9 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 		edit.heading = hasInjectionVoxelSelected()
 			? "Select Volume To Edit:" : "=== Edit Volume_0 ===";
 		if (hasInjectionVoxelSelected())
-			edit.rows.push_back(makeRow("[1] Edit", target, m_activePanelItem == 0));
+			edit.rows.push_back(makeRow("[1]: Edit", target, m_activePanelItem == 0));
 		edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2] Select Object" : "[1] Select Object",
+			? "[2]: Select Object" : "[1]: Select Object",
 			volumePrimitiveName(),
 			m_activePanelItem == (hasInjectionVoxelSelected() ? 1 : 0)));
 		if (!hasInjectionVoxelSelected() || isEditingInjectionVoxel0()) {
@@ -1744,19 +1765,19 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			std::snprintf(degrees, sizeof(degrees), "%d",
 				rotationSteps[m_rotationIncrementIndex]);
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[3] Deg" : "[2] Deg", degrees,
+				? "[3]: Deg" : "[2]: Deg", degrees,
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 2 : 1)));
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[4] Offset Object" : "[3] Offset Object", "",
+				? "[4]: Offset Object" : "[3]: Offset Object", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 3 : 2)));
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[5] Preview Object" : "[4] Preview Object", "",
+				? "[5]: Preview Object" : "[4]: Preview Object", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 3)));
 		}
 		else {
-			edit.rows.push_back(makeRow("[3] Commit Brush Base", "",
+			edit.rows.push_back(makeRow("[3]: Commit Brush Base", "",
 				m_activePanelItem == 2));
-			edit.rows.push_back(makeRow("[4] MIRROR",
+			edit.rows.push_back(makeRow("[4]: MIRROR",
 				m_mirrorMode == MirrorMode::On ? "ON" : "NONE",
 				m_activePanelItem == 3));
 		}
@@ -1770,19 +1791,19 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			? "Edit Offset Volume:" : "Offset Grid Vector:";
 		int row = 0;
 		if (hasInjectionVoxelSelected())
-			offset.rows.push_back(makeRow("[1] Select", target,
+			offset.rows.push_back(makeRow("[1]: Select", target,
 				m_activePanelItem == row++));
 		const char* axis = m_offsetVector == OffsetVector::Y ? "Y"
 			: m_offsetVector == OffsetVector::Z ? "Z" : "X";
 		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2] Offset" : "[1] Offset", axis, m_activePanelItem == row++));
+			? "[2]: Offset" : "[1]: Offset", axis, m_activePanelItem == row++));
 		char increment[32];
 		std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
 		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[3] Increments" : "[2] Increments", increment,
+			? "[3]: Increments" : "[2]: Increments", increment,
 			m_activePanelItem == row++));
 		if (hasInjectionVoxelSelected() && isEditingInjectionVoxel1()) {
-			offset.rows.push_back(makeRow("[4] Inject",
+			offset.rows.push_back(makeRow("[4]: Inject",
 				m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE",
 				m_activePanelItem == 3));
 		}
@@ -1790,7 +1811,7 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			if (hasInjectionVoxelSelected()) {
 				char rail[32];
 				std::snprintf(rail, sizeof(rail), "%.2f", m_injectionRailT);
-				offset.rows.push_back(makeRow("[4] Injection Vector", rail,
+				offset.rows.push_back(makeRow("[4]: Injection Vector", rail,
 					m_activePanelItem == 3));
 			}
 			const bool ready = canApplyVolumeToBase();
@@ -1799,13 +1820,13 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 					std::to_string(m_volumeBoundaryUnsafeCount) + " PATCHES";
 			WorkspacePanelRow apply = makeRow(hasInjectionVoxelSelected()
 				? (m_injectionMode == InjectionMode::Cut
-					? "[5] Cut Voxel From Anchor" : "[5] Fuse Voxel To Anchor")
-				: "[3] Apply To Base", state,
+					? "[5]: Cut Voxel From Anchor" : "[5]: Fuse Voxel To Anchor")
+				: "[3]: Apply To Base", state,
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 2));
 			apply.selectable = ready;
 			offset.rows.push_back(apply);
 			offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[6] Edit Object" : "[4] Edit Object", "",
+				? "[6]: Edit Object" : "[4]: Edit Object", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 5 : 3)));
 		}
 		p.sections.push_back(offset);
@@ -1815,11 +1836,11 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 	WorkspacePanelSection apply;
 	apply.heading = std::string("Apply Operation Mode ") +
 		(m_injectionMode == InjectionMode::Cut ? "{ CUT }" : "{ FUSE }");
-	apply.rows.push_back(makeRow("[1] Commit / Loop Back To Preview", "",
+	apply.rows.push_back(makeRow("[1]: Commit / Loop Back To Preview", "",
 		m_activePanelItem == 0));
-	apply.rows.push_back(makeRow("[2] Preview Object", "",
+	apply.rows.push_back(makeRow("[2]: Preview Object", "",
 		m_activePanelItem == 2));
-	apply.rows.push_back(makeRow("[3] Offset Object", "",
+	apply.rows.push_back(makeRow("[3]: Offset Object", "",
 		m_activePanelItem == 1));
 	p.sections.push_back(apply);
 }

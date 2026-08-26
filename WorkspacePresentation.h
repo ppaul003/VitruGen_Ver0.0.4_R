@@ -14,6 +14,13 @@ enum class WorkspaceStatusTone {
 	Caution
 };
 
+enum class WorkspacePanelLayout {
+	Main = 0,
+
+	// Layer-3 workspace control panel
+	SubLayer
+};
+
 struct WorkspacePanelRow {
 
 	std::string label;
@@ -57,6 +64,9 @@ struct WorkspacePresentation {
 	
 	bool panelVisible = false;
 	
+	WorkspacePanelLayout panelLayout =
+		WorkspacePanelLayout::Main;
+
 	std::string workspaceName;
 
 	std::string layerLabel;
