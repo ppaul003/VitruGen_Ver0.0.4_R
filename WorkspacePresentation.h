@@ -21,6 +21,21 @@ enum class WorkspacePanelLayout {
 	SubLayer
 };
 
+// Presentation-only geometry variants for the Layer-3 tool panel.
+// Workspaces choose the semantic variant; ViewPort owns all coordinates.
+enum class WorkspaceSubLayerPanelLayout {
+	Automatic = 0,
+	AssemblyPreview,
+	AssemblyEditVolume0,
+	AssemblyEditTargetVolume0,
+	AssemblyEditTargetVolume1,
+	AssemblyOffsetVolume0,
+	AssemblyOffsetTargetVolume0,
+	AssemblyOffsetTargetVolume1,
+	AssemblyApply,
+	MarchingCubesReport
+};
+
 struct WorkspacePanelRow {
 
 	std::string label;
@@ -30,12 +45,16 @@ struct WorkspacePanelRow {
 	bool selected = false;
 	bool subordinate = false;
 	bool emphasized = false;
+
+	WorkspaceStatusTone tone =
+		WorkspaceStatusTone::Neutral;
 };
 
 struct WorkspacePanelSection {
 
 	std::string heading;
 	std::vector<WorkspacePanelRow> rows;
+	std::vector<std::string> notes;
 };
 
 struct WorkspaceRuntimeStatus {
@@ -76,10 +95,14 @@ struct WorkspacePresentation {
 	WorkspacePanelLayout panelLayout =
 		WorkspacePanelLayout::Main;
 
+	WorkspaceSubLayerPanelLayout subLayerPanelLayout =
+		WorkspaceSubLayerPanelLayout::Automatic;
+
 	std::string workspaceName;
 
 	std::string layerLabel;
 	std::string subLayerLabel;
+	std::string panelContextLine;
 
 	std::string statusLine;
 

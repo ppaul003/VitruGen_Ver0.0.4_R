@@ -285,6 +285,14 @@ MarchingCubes* Tesseract::singleParticleMarchingCubes() const {
 	return m_singleParticleWorkspace.marchingCubes();
 }
 
+bool Tesseract::prepareSingleParticleMarchingCubesExport() {
+	return m_singleParticleWorkspace.prepareMarchingCubesExport();
+}
+
+void Tesseract::activateSingleParticleExportedMeshRender() {
+	m_singleParticleWorkspace.activateExportedMeshRender();
+}
+
 bool Tesseract::singleParticleHasCommittedGeometry() const {
 	return m_singleParticleWorkspace.hasCommittedGeometry();
 }
@@ -413,7 +421,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 	switch (m_domainTransitionPhase) {
 
 		// =========================================================
-		// ENTER GRID_3D — PHASE 1
+		// ENTER GRID_3D â€” PHASE 1
 		//
 		// Cube:
 		//     continue CCW
@@ -442,7 +450,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		return;
 
 	// =========================================================
-	// ENTER GRID_3D — READY HOLD
+	// ENTER GRID_3D â€” READY HOLD
 	//
 	// Tesseract:
 	//     front facing
@@ -480,7 +488,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		return;
 
 	// =========================================================
-	// ENTER GRID_3D — PHASE 2
+	// ENTER GRID_3D â€” PHASE 2
 	//
 	// Camera moves toward centered GRID_3D view.
 	// Cube remains frozen front-facing.
@@ -512,7 +520,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		return;
 
 		// =========================================================
-		// RETURN TO LAYER 0 — PHASE 1
+		// RETURN TO LAYER 0 â€” PHASE 1
 		//
 		// Camera moves back first.
 		// SINGLE_PARTICLE remains structurally active.
@@ -543,7 +551,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		return;
 
 		// =========================================================
-		// RETURN TO LAYER 0 — PHASE 2
+		// RETURN TO LAYER 0 â€” PHASE 2
 		//
 		// XY slice releases from center.
 		// Cube resumes normal counter-clockwise idle rotation.

@@ -41,6 +41,17 @@ namespace {
 		return row;
 	}
 
+	WorkspacePanelRow makeInfoRow(
+		const std::string& label,
+		const std::string& value = std::string(),
+		WorkspaceStatusTone tone = WorkspaceStatusTone::Neutral) {
+		WorkspacePanelRow row;
+		row.label = label;
+		row.value = value;
+		row.tone = tone;
+		return row;
+	}
+
 	struct InjectionDirection { int x; int y; int z; };
 	constexpr InjectionDirection kInjectionDirections[] = {
 		{ 0, 0, 0 },
@@ -474,27 +485,12 @@ bool SingleParticleWorkspace::handleLayer3Input(
 					m_activePanelItem = 0;
 				}
 			}
-			else if (commitSPWorkingVolume(*this)) {
-				m_assemblyNode = AssemblyNode::Preview;
-				m_activePanelItem = 0;
-				m_injectionVoxel = InjectionVoxel::None;
-				m_editTarget = EditTarget::Volume0;
-				m_mirrorMode = MirrorMode::None;
-				resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_BASE);
-				resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
-				resetObjectOffset();
-			}
+			else if (commitSPWorkingVolume(*this)) finalizeCommittedBase();
 			updateCameraIntent(services);
 			return true;
 		}
 		if (m_subLayer == SubLayer::MarchingCubes) {
-			m_subLayer = SubLayer::Reference;
-			m_assemblyNode = AssemblyNode::Preview;
-			m_subLayerPanelOpen = false;
-			m_activePanelItem = 0;
-			m_selectedParticle = false;
-			m_hoverValid = false;
-			m_workplaneSlice = 0;
+			returnFromMarchingCubesToReference();
 			updateCameraIntent(services);
 			return true;
 		}
@@ -996,19 +992,10 @@ void SingleParticleWorkspace::activateSubLayerPanelItem(
 		case 1: m_pendingHostRequest = HostRequest::SaveStaticParticleAs; break;
 		case 2: m_pendingHostRequest = HostRequest::ExportObj; break;
 		case 3:
-			m_subLayer = SubLayer::VolumeRender;
-			m_assemblyNode = AssemblyNode::Preview;
-			m_subLayerPanelOpen = true;
-			m_activePanelItem = 0;
+			returnFromMarchingCubesToPreview();
 			break;
 		case 4:
-			m_subLayer = SubLayer::Reference;
-			m_assemblyNode = AssemblyNode::Preview;
-			m_subLayerPanelOpen = false;
-			m_activePanelItem = 0;
-			m_selectedParticle = false;
-			m_hoverValid = false;
-			m_workplaneSlice = 0;
+			returnFromMarchingCubesToReference();
 			break;
 		default: break;
 		}
@@ -1078,15 +1065,7 @@ void SingleParticleWorkspace::activateSubLayerPanelItem(
 		break;
 	case AssemblyNode::ApplyToBase:
 		if (m_activePanelItem == 0) {
-			if (commitSPWorkingVolume(*this)) {
-				m_assemblyNode = AssemblyNode::Preview;
-				m_activePanelItem = 0;
-				m_injectionVoxel = InjectionVoxel::None;
-				m_editTarget = EditTarget::Volume0;
-				m_mirrorMode = MirrorMode::None;
-				resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_BASE);
-				resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
-			}
+			if (commitSPWorkingVolume(*this)) finalizeCommittedBase();
 		}
 		else if (m_activePanelItem == 1) {
 			m_assemblyNode = AssemblyNode::OffsetObject;
@@ -1158,6 +1137,35 @@ void SingleParticleWorkspace::enterMarchingCubes(WorkspaceServices& services) {
 	m_subLayerPanelOpen = true;
 	m_activePanelItem = 0;
 	updateCameraIntent(services);
+}
+
+bool SingleParticleWorkspace::prepareMarchingCubesExport() {
+	return m_marchingCubes &&
+		(m_marchingCubes->hasTriangleData() || extractMarchingCubesMesh());
+}
+
+void SingleParticleWorkspace::activateExportedMeshRender() {
+	m_particleRenderMode = ParticleRenderMode::Mesh;
+	if (m_services) syncParticleRendering(*m_services);
+}
+
+void SingleParticleWorkspace::returnFromMarchingCubesToPreview() {
+	m_subLayer = SubLayer::VolumeRender;
+	m_assemblyNode = AssemblyNode::Preview;
+	m_subLayerPanelOpen = true;
+	m_activePanelItem = 0;
+}
+
+void SingleParticleWorkspace::returnFromMarchingCubesToReference() {
+	m_subLayer = SubLayer::Reference;
+	m_assemblyNode = AssemblyNode::Preview;
+	m_subLayerPanelOpen = false;
+	m_activePanelItem = 0;
+	m_selectedParticle = false;
+	m_hoverValid = false;
+	m_hoverX = 0.0f;
+	m_hoverY = 0.0f;
+	m_workplaneSlice = 0;
 }
 
 bool SingleParticleWorkspace::trySelectParticle(int, int) {
@@ -1323,102 +1331,212 @@ WorkspaceMenuPresentation SingleParticleWorkspace::buildMenu() const {
 	const auto add = [&](const std::string& label, int command, bool enabled = true) {
 		menu.items.push_back({ label, command, enabled });
 	};
-	const auto divider = [&]() { add("=========================================", 0, false); };
+	const auto divider = [&]() {
+		add("=========================================", 0, false);
+	};
+	const auto selected = [](const char* label, bool active) {
+		return std::string(active ? "* " : "  ") + label +
+			(active ? " { SELECTED }" : "");
+	};
 
 	if (!m_services || !m_services->arbiter ||
 		!m_services->arbiter->isActiveWorkspace()) return menu;
+
 	if (m_subLayer == SubLayer::Reference) {
-		add(m_selectedParticle ? "* Deselect Particle"
-			: m_selectionArmed ? "* Cancel Particle Selection"
-			: "* Select Workplane Particle", MenuPrimary);
+		add("- Sub-Layer 0: Particle Selection / Collision Setup", 0, false);
+		divider();
+		add(m_selectedParticle ? "* Deselect particle"
+			: m_selectionArmed ? "* Cancel particle selection"
+			: "* Arm particle selection", MenuPrimary);
 		divider();
 		add("Collision Proxy:", 0, false);
 		static const char* collision[] = {
-			"SPHERE", "BLOCK", "CAPSULE", "CONE", "DEFORMABLE SPHERE"
+			"Sphere", "Block", "Capsule", "Cone", "Deformable Sphere"
 		};
-		for (int i = 0; i < 5; ++i)
-			add(std::string(static_cast<int>(m_collisionShape) == i ? "* " : "  ") +
-				collision[i], MenuCollisionBase + i);
+		for (int i = 0; i < 5; ++i) {
+			const bool active = static_cast<int>(m_collisionShape) == i;
+			std::string label = selected(collision[i], active);
+			label += i == 0 ? " { OPERATIONAL }" : " { RESERVED }";
+			add(label, MenuCollisionBase + i);
+		}
 		divider();
+		add("Static Particle Asset:", 0, false);
 		add("* Load Static Particle", MenuLoad);
 		add("* Save Active Particle", MenuSaveAs);
-		add("* Rendering Setup", MenuToShape, m_selectedParticle);
+		divider();
+		add("Next Sub-Layer:", 0, false);
+		add(m_selectedParticle ? "* Rendering Setup"
+			: "- Rendering Setup { SELECT PARTICLE FIRST }",
+			MenuToShape, m_selectedParticle);
+		divider();
 		add("* Return to Layer 2", MenuBack);
 	}
 	else if (m_subLayer == SubLayer::ShapeEdit) {
+		add("- Sub-Layer 1: Rendering Setup", 0, false);
+		divider();
 		add("Render Source:", 0, false);
-		add("* PARTICLE", MenuRenderSourceBase);
-		add("* MESH", MenuRenderSourceBase + 1);
+		add(selected("Particle", m_particleRenderMode == ParticleRenderMode::Default),
+			MenuRenderSourceBase);
+		add(selected("Mesh", m_particleRenderMode == ParticleRenderMode::Mesh),
+			MenuRenderSourceBase + 1);
+		divider();
 		add("Mesh Bound:", 0, false);
-		add("* DEFAULT", MenuMeshBoundBase);
-		add("* FILL", MenuMeshBoundBase + 1);
+		add(selected("Default", m_meshBoundMode == MeshBoundMode::Default),
+			MenuMeshBoundBase);
+		add(selected("Fill", m_meshBoundMode == MeshBoundMode::Fill),
+			MenuMeshBoundBase + 1);
+		divider();
 		add("Display Mode:", 0, false);
-		add("* RENDER", MenuDisplayBase);
-		add("* RENDER + COLLISION", MenuDisplayBase + 1);
-		add("* WIREFRAME", MenuDisplayBase + 2);
-		add("* Render Cage ON", MenuCageBase + 1);
-		add("* Render Cage OFF", MenuCageBase);
+		add(selected("Render", m_displayMode == DisplayMode::Render), MenuDisplayBase);
+		add(selected("Render + Collision",
+			m_displayMode == DisplayMode::RenderAndCollision), MenuDisplayBase + 1);
+		add(selected("Wireframe", m_displayMode == DisplayMode::Wireframe),
+			MenuDisplayBase + 2);
+		divider();
+		add("Render Cage:", 0, false);
+		add(selected("On", m_renderCageVisible), MenuCageBase + 1);
+		add(selected("Off", !m_renderCageVisible), MenuCageBase);
 		divider();
 		add("* Mesh / Volume Preview and Edit", MenuToVolume);
-		add("* Collision Setup", MenuToReference);
+		add("* Return to Collision Setup", MenuToReference);
 	}
 	else if (m_subLayer == SubLayer::MarchingCubes) {
+		add("- Sub-Layer 3: Marching Cubes", 0, false);
+		divider();
+		add("Output:", 0, false);
 		add("* Save Static Particle", MenuSave);
 		add("* Save Static Particle As", MenuSaveAs);
 		add("* Export .OBJ", MenuExportObj);
 		divider();
-		add("* To Sub-Layer_2 Preview", MenuToVolume);
-		add("* Return to Sub-Layer_0", MenuToReference);
+		add("Previous Sub-Layer:", 0, false);
+		add("* Sub-Layer 2: Assembly Nodes", MenuToVolume);
+		divider();
+		add("Next Sub-Layer:", 0, false);
+		add("* Sub-Layer 0: Simulation Run", MenuToReference);
 	}
 	else {
-		add("Volume Assembly:", 0, false);
-		add("* Node_0 Preview", MenuToPreview);
-		add("* Node_1 Edit Object", MenuToEdit);
-		add("* Node_2 Offset Object", MenuToOffset);
-		add("* Node_3 Apply To Base", MenuToApply, canApplyVolumeToBase());
-		add("* Run MC_Mode", MenuRunMarchingCubes,
-			m_assemblyNode == AssemblyNode::Preview);
-		if (m_assemblyNode == AssemblyNode::EditObject) {
+		const bool injection = hasInjectionVoxelSelected();
+		const bool editingBrush = injection && isEditingInjectionVoxel1();
+
+		if (m_assemblyNode == AssemblyNode::Preview) {
+			add("- Sub-Layer 2: Preview Object", 0, false);
 			divider();
-			add("Object Primitives:", 0, false);
+			add("Next Assembly Node:", 0, false);
+			add("* Edit Object", MenuToEdit);
+			divider();
+			add("To Sub-Layer 3:", 0, false);
+			add("* Run MC mode", MenuRunMarchingCubes);
+		}
+		else if (m_assemblyNode == AssemblyNode::EditObject) {
+			add(!injection ? "- Sub-Layer 2: Edit Object"
+				: editingBrush ? "- Sub-Layer 2: Edit Brush Object"
+				: "- Sub-Layer 2: Edit Anchor Object", 0, false);
+			divider();
+			add("Procedural Primitive:", 0, false);
 			static const char* primitives[] = {
 				"BASE", "SPHERE", "TORUS", "BLOCK", "CYLINDER",
 				"CONE", "CAPSULE", "WEDGE", "DELTA_WING", "FRUSTUM"
 			};
 			for (int i = 0; i < 10; ++i)
-				add(std::string("* ") + primitives[i], MenuPrimitiveBase + i);
-			add("Scale Mode:", 0, false);
-			add("* Whole", MenuScaleModeBase);
-			add("* Z", MenuScaleModeBase + 1);
-			add("* Y", MenuScaleModeBase + 2);
-			add("* X", MenuScaleModeBase + 3);
-			add("* Reset Scale", MenuResetScale);
-			add("Rotation Mode:", 0, false);
-			add("* Pitch", MenuRotationModeBase);
-			add("* Yaw", MenuRotationModeBase + 1);
-			add("* Roll", MenuRotationModeBase + 2);
+				add(std::string(static_cast<int>(getResolvedVolumePrimitiveSelection()) == i
+					? "* " : "  ") + primitives[i], MenuPrimitiveBase + i);
+			divider();
+			add("Edit Object Shape:", 0, false);
+			add(selected("Scale whole object",
+				m_objectTransformMode == ObjectTransformMode::Scale &&
+				m_objectEditMode == ObjectEditMode::ScaleWhole), MenuScaleModeBase);
+			add(selected("Scale z-axis",
+				m_objectTransformMode == ObjectTransformMode::Scale &&
+				m_objectEditMode == ObjectEditMode::ScaleZ), MenuScaleModeBase + 1);
+			add(selected("Scale y-axis",
+				m_objectTransformMode == ObjectTransformMode::Scale &&
+				m_objectEditMode == ObjectEditMode::ScaleY), MenuScaleModeBase + 2);
+			add(selected("Scale x-axis",
+				m_objectTransformMode == ObjectTransformMode::Scale &&
+				m_objectEditMode == ObjectEditMode::ScaleX), MenuScaleModeBase + 3);
+			if (!injection) add("* Reset Scale", MenuResetScale);
+			divider();
+			add("Edit Object Rotation:", 0, false);
+			add(selected("Pitch",
+				m_objectTransformMode == ObjectTransformMode::Rotation &&
+				m_objectRotationMode == ObjectRotationMode::Pitch),
+				MenuRotationModeBase);
+			add(selected("Yaw",
+				m_objectTransformMode == ObjectTransformMode::Rotation &&
+				m_objectRotationMode == ObjectRotationMode::Yaw),
+				MenuRotationModeBase + 1);
+			add(selected("Roll",
+				m_objectTransformMode == ObjectTransformMode::Rotation &&
+				m_objectRotationMode == ObjectRotationMode::Roll),
+				MenuRotationModeBase + 2);
 			add("* Reset Rotation", MenuResetRotation);
-			if (isEditingInjectionVoxel1()) {
-				add("* Commit Brush Base", MenuCommitBrushBase);
-				add("* Mirror NONE", MenuMirrorBase);
-				add("* Mirror ON", MenuMirrorBase + 1);
+			if (editingBrush) {
+				divider();
+				add("Mirror Injection:", 0, false);
+				add(selected("Mirror { NONE }", m_mirrorMode == MirrorMode::None),
+					MenuMirrorBase);
+				add(selected("Mirror { ON }", m_mirrorMode == MirrorMode::On),
+					MenuMirrorBase + 1);
+				divider();
+				add("Commit Brush Base:", 0, false);
+				add("* Commit Brush", MenuCommitBrushBase);
 			}
+			divider();
+			add("Next Assembly Node:", 0, false);
+			add("* Offset Object", MenuToOffset);
+			divider();
+			add("Previous Assembly Node:", 0, false);
+			add("* Preview Object", MenuToPreview);
 		}
 		else if (m_assemblyNode == AssemblyNode::OffsetObject) {
+			add(editingBrush ? "- Sub-Layer 2: Offset Brush Object"
+				: injection ? "- Sub-Layer 2: Offset Anchor Object"
+				: "- Sub-Layer 2: Offset Object", 0, false);
 			divider();
-			add("Offset Vector:", 0, false);
-			add("* X", MenuOffsetAxisBase);
-			add("* Y", MenuOffsetAxisBase + 1);
-			add("* Z", MenuOffsetAxisBase + 2);
-			add("* Reset Object Offset", MenuResetOffset);
-			if (hasInjectionVoxelSelected())
-				add("* Toggle FUSE / CUT", MenuToggleInjectionMode);
+			add("Edit Object Offset:", 0, false);
+			add(selected("Offset z-vector", m_offsetVector == OffsetVector::Z),
+				MenuOffsetAxisBase + 2);
+			add(selected("Offset y-vector", m_offsetVector == OffsetVector::Y),
+				MenuOffsetAxisBase + 1);
+			add(selected("Offset x-vector", m_offsetVector == OffsetVector::X),
+				MenuOffsetAxisBase);
+			add("* Reset Offset", MenuResetOffset);
+			if (editingBrush) {
+				divider();
+				add("Toggle Injection Brush:", 0, false);
+				add(std::string("* Injection Brush { ") +
+					(m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE") + " }",
+					MenuToggleInjectionMode);
+			}
+			else {
+				divider();
+				add("Next Assembly Node:", 0, false);
+				std::string applyLabel;
+				if (canApplyVolumeToBase()) applyLabel = "* Apply to Base { READY }";
+				else if (m_volumeBoundarySensorReady)
+					applyLabel = "- Apply to Base { BLOCKED: " +
+						std::to_string(m_volumeBoundaryUnsafeCount) + " PATCHES }";
+				else applyLabel = "- Apply to Base { CHECKING }";
+				add(applyLabel, MenuToApply, canApplyVolumeToBase());
+				divider();
+				add("Previous Assembly Node:", 0, false);
+				add("* Edit Object", MenuToEdit);
+			}
 		}
-		else if (m_assemblyNode == AssemblyNode::ApplyToBase) {
+		else {
+			add("- Sub-Layer 2: Apply to Base", 0, false);
 			divider();
-			add("* Commit New Base", MenuCommit);
+			add("Edit Base Vector:", 0, false);
+			add("* Commit New Base Vector", MenuCommit);
+			divider();
+			add("Next Assembly Node:", 0, false);
+			add("* Preview Object", MenuToPreview);
+			divider();
+			add("Previous Assembly Node:", 0, false);
+			add("* Offset Object", MenuToOffset);
 		}
 	}
+
 	divider();
 	add("* Back (Q)", MenuBack);
 	return menu;
@@ -1427,90 +1545,150 @@ WorkspaceMenuPresentation SingleParticleWorkspace::buildMenu() const {
 bool SingleParticleWorkspace::handleMenuCommand(
 	int command,
 	WorkspaceServices& services) {
-	if (command == MenuPrimary)
+	const bool volume = m_subLayer == SubLayer::VolumeRender;
+	const bool injection = hasInjectionVoxelSelected();
+	const bool editingBrush = injection && isEditingInjectionVoxel1();
+
+	if (command == MenuPrimary && m_subLayer == SubLayer::Reference)
 		return handleInput({ WorkspaceInputAction::Activate }, services);
 	if (command == MenuTogglePanel)
 		return handleInput({ WorkspaceInputAction::Toggle }, services);
 	if (command == MenuBack)
 		return handleInput({ WorkspaceInputAction::Back }, services);
-	if (command == MenuLoad) m_pendingHostRequest = HostRequest::LoadStaticParticle;
-	else if (command == MenuSave) m_pendingHostRequest = HostRequest::SaveStaticParticle;
-	else if (command == MenuSaveAs) m_pendingHostRequest = HostRequest::SaveStaticParticleAs;
-	else if (command == MenuExportObj) m_pendingHostRequest = HostRequest::ExportObj;
-	else if (command >= MenuCollisionBase && command < MenuCollisionBase + 5)
+
+	if (command == MenuLoad && m_subLayer == SubLayer::Reference)
+		m_pendingHostRequest = HostRequest::LoadStaticParticle;
+	else if (command == MenuSave && m_subLayer == SubLayer::MarchingCubes)
+		m_pendingHostRequest = HostRequest::SaveStaticParticle;
+	else if (command == MenuSaveAs &&
+		(m_subLayer == SubLayer::Reference || m_subLayer == SubLayer::MarchingCubes))
+		m_pendingHostRequest = HostRequest::SaveStaticParticleAs;
+	else if (command == MenuExportObj && m_subLayer == SubLayer::MarchingCubes)
+		m_pendingHostRequest = HostRequest::ExportObj;
+	else if (command >= MenuCollisionBase && command < MenuCollisionBase + 5 &&
+		m_subLayer == SubLayer::Reference)
 		m_collisionShape = static_cast<CollisionShape>(command - MenuCollisionBase);
-	else if (command >= MenuRenderSourceBase && command < MenuRenderSourceBase + 2)
+	else if (command >= MenuRenderSourceBase && command < MenuRenderSourceBase + 2 &&
+		m_subLayer == SubLayer::ShapeEdit)
 		m_particleRenderMode = static_cast<ParticleRenderMode>(command - MenuRenderSourceBase);
-	else if (command >= MenuMeshBoundBase && command < MenuMeshBoundBase + 2)
+	else if (command >= MenuMeshBoundBase && command < MenuMeshBoundBase + 2 &&
+		m_subLayer == SubLayer::ShapeEdit)
 		m_meshBoundMode = static_cast<MeshBoundMode>(command - MenuMeshBoundBase);
-	else if (command >= MenuDisplayBase && command < MenuDisplayBase + 3)
+	else if (command >= MenuDisplayBase && command < MenuDisplayBase + 3 &&
+		m_subLayer == SubLayer::ShapeEdit)
 		m_displayMode = static_cast<DisplayMode>(command - MenuDisplayBase);
-	else if (command >= MenuCageBase && command < MenuCageBase + 2)
+	else if (command >= MenuCageBase && command < MenuCageBase + 2 &&
+		m_subLayer == SubLayer::ShapeEdit)
 		m_renderCageVisible = command != MenuCageBase;
-	else if (command == MenuToReference) {
-		m_subLayer = SubLayer::Reference;
-		m_assemblyNode = AssemblyNode::Preview;
-		m_subLayerPanelOpen = false;
-		m_activePanelItem = 0;
+	else if (command == MenuToReference &&
+		(m_subLayer == SubLayer::ShapeEdit || m_subLayer == SubLayer::MarchingCubes)) {
+		if (m_subLayer == SubLayer::MarchingCubes)
+			returnFromMarchingCubesToReference();
+		else {
+			m_subLayer = SubLayer::Reference;
+			m_assemblyNode = AssemblyNode::Preview;
+			m_subLayerPanelOpen = true;
+			m_activePanelItem = 0;
+		}
 	}
-	else if (command == MenuToShape && m_selectedParticle) {
+	else if (command == MenuToShape && m_subLayer == SubLayer::Reference &&
+		m_selectedParticle) {
 		m_subLayer = SubLayer::ShapeEdit;
 		m_subLayerPanelOpen = true;
 		m_activePanelItem = 0;
 	}
-	else if (command == MenuToVolume) {
-		m_subLayer = SubLayer::VolumeRender;
+	else if (command == MenuToVolume &&
+		(m_subLayer == SubLayer::ShapeEdit || m_subLayer == SubLayer::MarchingCubes)) {
+		if (m_subLayer == SubLayer::MarchingCubes)
+			returnFromMarchingCubesToPreview();
+		else {
+			m_subLayer = SubLayer::VolumeRender;
+			m_assemblyNode = AssemblyNode::Preview;
+			m_subLayerPanelOpen = true;
+			m_activePanelItem = 0;
+			markVolumeDirty();
+		}
+	}
+	else if (command == MenuRunMarchingCubes && volume &&
+		m_assemblyNode == AssemblyNode::Preview)
+		enterMarchingCubes(services);
+	else if (command == MenuToPreview && volume &&
+		(m_assemblyNode == AssemblyNode::EditObject ||
+			m_assemblyNode == AssemblyNode::ApplyToBase)) {
 		m_assemblyNode = AssemblyNode::Preview;
-		m_subLayerPanelOpen = true;
 		m_activePanelItem = 0;
 		markVolumeDirty();
 	}
-	else if (command == MenuRunMarchingCubes) enterMarchingCubes(services);
-	else if (command == MenuToPreview) {
-		m_assemblyNode = AssemblyNode::Preview; m_activePanelItem = 0; markVolumeDirty();
+	else if (command == MenuToEdit && volume &&
+		(m_assemblyNode == AssemblyNode::Preview ||
+			m_assemblyNode == AssemblyNode::OffsetObject)) {
+		m_assemblyNode = AssemblyNode::EditObject;
+		m_activePanelItem = 0;
+		markVolumeDirty();
 	}
-	else if (command == MenuToEdit) {
-		m_assemblyNode = AssemblyNode::EditObject; m_activePanelItem = 0; markVolumeDirty();
+	else if (command == MenuToOffset && volume &&
+		(m_assemblyNode == AssemblyNode::EditObject ||
+			m_assemblyNode == AssemblyNode::ApplyToBase)) {
+		m_assemblyNode = AssemblyNode::OffsetObject;
+		m_activePanelItem = 0;
 	}
-	else if (command == MenuToOffset) {
-		m_assemblyNode = AssemblyNode::OffsetObject; m_activePanelItem = 0;
+	else if (command == MenuToApply && volume &&
+		m_assemblyNode == AssemblyNode::OffsetObject && !editingBrush &&
+		canApplyVolumeToBase()) {
+		m_assemblyNode = AssemblyNode::ApplyToBase;
+		m_activePanelItem = 0;
 	}
-	else if (command == MenuToApply && canApplyVolumeToBase()) {
-		m_assemblyNode = AssemblyNode::ApplyToBase; m_activePanelItem = 0;
+	else if (command == MenuCommit && volume &&
+		m_assemblyNode == AssemblyNode::ApplyToBase) {
+		if (commitSPWorkingVolume(*this)) finalizeCommittedBase();
 	}
-	else if (command == MenuCommit) {
-		m_activePanelItem = 0; activateSubLayerPanelItem(services);
-	}
-	else if (command >= MenuPrimitiveBase && command < MenuPrimitiveBase + 10) {
+	else if (command >= MenuPrimitiveBase && command < MenuPrimitiveBase + 10 &&
+		volume && m_assemblyNode == AssemblyNode::EditObject) {
 		activeVolumeState().primitive =
 			static_cast<VolumePrimitive>(command - MenuPrimitiveBase);
 		markVolumeDirty();
 	}
-	else if (command >= MenuScaleModeBase && command < MenuScaleModeBase + 4) {
+	else if (command >= MenuScaleModeBase && command < MenuScaleModeBase + 4 &&
+		volume && m_assemblyNode == AssemblyNode::EditObject) {
 		m_objectEditMode = static_cast<ObjectEditMode>(command - MenuScaleModeBase);
 		m_objectTransformMode = ObjectTransformMode::Scale;
 	}
-	else if (command >= MenuRotationModeBase && command < MenuRotationModeBase + 3) {
+	else if (command >= MenuRotationModeBase && command < MenuRotationModeBase + 3 &&
+		volume && m_assemblyNode == AssemblyNode::EditObject) {
 		m_objectRotationMode =
 			static_cast<ObjectRotationMode>(command - MenuRotationModeBase);
 		m_objectTransformMode = ObjectTransformMode::Rotation;
 	}
-	else if (command == MenuResetScale) resetObjectScale();
-	else if (command == MenuResetRotation) resetObjectRotation();
-	else if (command >= MenuOffsetAxisBase && command < MenuOffsetAxisBase + 3)
+	else if (command == MenuResetScale && volume &&
+		m_assemblyNode == AssemblyNode::EditObject && !injection)
+		resetObjectScale();
+	else if (command == MenuResetRotation && volume &&
+		m_assemblyNode == AssemblyNode::EditObject)
+		resetObjectRotation();
+	else if (command >= MenuOffsetAxisBase && command < MenuOffsetAxisBase + 3 &&
+		volume && m_assemblyNode == AssemblyNode::OffsetObject)
 		m_offsetVector = static_cast<OffsetVector>(command - MenuOffsetAxisBase);
-	else if (command == MenuResetOffset) resetObjectOffset();
-	else if (command == MenuToggleInjectionMode) cycleVolumeInjectionMode(1);
-	else if (command == MenuCommitBrushBase) commitBrushBase();
-	else if (command >= MenuMirrorBase && command < MenuMirrorBase + 2) {
+	else if (command == MenuResetOffset && volume &&
+		m_assemblyNode == AssemblyNode::OffsetObject)
+		resetObjectOffset();
+	else if (command == MenuToggleInjectionMode && volume &&
+		m_assemblyNode == AssemblyNode::OffsetObject && editingBrush)
+		cycleVolumeInjectionMode(1);
+	else if (command == MenuCommitBrushBase && volume &&
+		m_assemblyNode == AssemblyNode::EditObject && editingBrush)
+		commitBrushBase();
+	else if (command >= MenuMirrorBase && command < MenuMirrorBase + 2 &&
+		volume && m_assemblyNode == AssemblyNode::EditObject && editingBrush) {
 		m_mirrorMode = command == MenuMirrorBase ? MirrorMode::None : MirrorMode::On;
 		markVolumeDirty();
 	}
 	else return false;
+
 	updateCameraIntent(services);
 	syncParticleRendering(services);
 	return true;
 }
+
 
 SingleParticleWorkspace::OverlapPreviewStatus 
 SingleParticleWorkspace::runtimeOverlapStatus() const {
@@ -1588,6 +1766,13 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 	p.layerLabel = "LAYER 3 -> SIMULATION RUN (SINGLE_PARTICLE)";
 	p.panelLayout = WorkspacePanelLayout::SubLayer;
 	p.subLayerLabel = subLayerName();
+	if (m_subLayer == SubLayer::VolumeRender)
+		p.subLayerLabel = "SUB-LAYER_2 PANEL";
+	else if (m_subLayer == SubLayer::MarchingCubes) {
+		p.subLayerLabel = "SUB-LAYER_3 PANEL";
+		p.panelContextLine =
+			"SUB_LAYER_2 PREVIEW  -------->  SUB_LAYER_3 MC";
+	}
 
 	if (m_subLayer == SubLayer::Reference) {
 		// ---------------------------------------------------------
@@ -1622,7 +1807,8 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 		p.footerLine2 = "Q: Back";
 	}
 	else if (m_subLayer == SubLayer::MarchingCubes) {
-		if (m_subLayerPanelOpen) appendVolumePanel(p);
+		// Keep semantic contents alive while the panel slides out.
+		appendVolumePanel(p);
 		p.statusLine = m_marchingCubes && m_marchingCubes->hasTriangleData()
 			? "STATUS: TRIANGLE MESH READY"
 			: "STATUS: NO ISO-SURFACE DETECTED";
@@ -1802,7 +1988,7 @@ void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 	p.sections.push_back(debug);
 
 	WorkspacePanelSection traversal;
-	traversal.heading = "Next/Prev Sub-Layer:";
+	traversal.heading = "Next / Prev Sub-Layer:";
 	traversal.rows.push_back(makeRow("[5]: MESH / VOLUME PREVIEW AND EDIT", "",
 		m_activePanelItem == 4));
 	traversal.rows.push_back(makeRow("[6]: RETURN TO COLLISION SETUP", "",
@@ -1812,171 +1998,310 @@ void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 
 void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const {
 	if (m_subLayer == SubLayer::MarchingCubes) {
+		p.subLayerPanelLayout =
+			WorkspaceSubLayerPanelLayout::MarchingCubesReport;
+		p.panelContextLine =
+			"SUB_LAYER_2 PREVIEW  -------->  SUB_LAYER_3 MC";
+
 		WorkspacePanelSection report;
 		report.heading = "MC CLASSIFICATION REPORT";
 		if (m_marchingCubes) {
 			const uint3 grid = m_marchingCubes->getGridSize();
-			char value[160];
-			std::snprintf(value, sizeof(value), "%u x %u x %u    |    ISO: 0.0000",
-				grid.x, grid.y, grid.z);
-			report.rows.push_back(makeRow("Grid:", value, false));
-			std::snprintf(value, sizeof(value), "%u / %u",
-				m_marchingCubes->getActiveVoxelCount(),
-				m_marchingCubes->getNumVoxels());
-			report.rows.push_back(makeRow("Active cells:", value, false));
-			std::snprintf(value, sizeof(value), "%u vertices    |    %u triangles",
-				m_marchingCubes->getTotalVertexCount(),
-				m_marchingCubes->getGeneratedTriangleCount());
-			report.rows.push_back(makeRow("Output:", value, false));
+			const unsigned int active = m_marchingCubes->getActiveVoxelCount();
+			const unsigned int total = m_marchingCubes->getNumVoxels();
+			const unsigned int vertices = m_marchingCubes->getTotalVertexCount();
+			const unsigned int triangles =
+				m_marchingCubes->getGeneratedTriangleCount();
+			const double percent = total > 0
+				? 100.0 * static_cast<double>(active) /
+					static_cast<double>(total)
+				: 0.0;
+			char value[192];
+			std::snprintf(value, sizeof(value),
+				"%u x %u x %u    |    ISO: 0.0000", grid.x, grid.y, grid.z);
+			report.rows.push_back(makeInfoRow("Grid:", value));
+			std::snprintf(value, sizeof(value), "%u / %u    (%.2f%%)",
+				active, total, percent);
+			report.rows.push_back(makeInfoRow("Active cells:", value));
+			std::snprintf(value, sizeof(value),
+				"%u vertices    |    %u triangles", vertices, triangles);
+			report.rows.push_back(makeInfoRow("Output:", value));
+			const bool meshReady = m_marchingCubes->hasTriangleData();
+			const bool hasSurface = active > 0 && vertices > 0;
+			report.rows.push_back(makeInfoRow("STATUS:",
+				meshReady ? "TRIANGLE MESH READY"
+				: hasSurface ? "CLASSIFIED / EXTRACTION INCOMPLETE"
+				: "NO ISO-SURFACE DETECTED",
+				meshReady ? WorkspaceStatusTone::Ready
+				: WorkspaceStatusTone::Warning));
+		}
+		else {
+			report.rows.push_back(makeInfoRow(
+				"Marching Cubes classification data unavailable.", "",
+				WorkspaceStatusTone::Warning));
 		}
 		p.sections.push_back(report);
+
 		WorkspacePanelSection output;
 		output.heading = "Output:";
-		output.rows.push_back(makeRow("[1]: SAVE STATIC PARTICLE", "",
+		output.rows.push_back(makeRow("[1] SAVE STATIC PARTICLE", "",
 			m_activePanelItem == 0));
-		output.rows.push_back(makeRow("[2]: SAVE STATIC PARTICLE AS", "",
+		output.rows.push_back(makeRow("[2] SAVE STATIC PARTICLE AS", "",
 			m_activePanelItem == 1));
-		output.rows.push_back(makeRow("[3]: EXPORT .OBJ", "",
+		output.rows.push_back(makeRow("[3] EXPORT .OBJ", "",
 			m_activePanelItem == 2));
 		p.sections.push_back(output);
-		WorkspacePanelSection back;
-		back.heading = "Next/Prev Sub-Layer:";
-		back.rows.push_back(makeRow("[4]: LOOP BACK TO SUB-LAYER_0", "",
+
+		WorkspacePanelSection previous;
+		previous.heading = "Previous Sub-layer:";
+		previous.rows.push_back(makeRow("[4] To Sub-Layer_2 Preview", "",
 			m_activePanelItem == 3));
-		back.rows.push_back(makeRow("[5]: ASSEMBLY NODES", "",
+		p.sections.push_back(previous);
+
+		WorkspacePanelSection next;
+		next.heading = "Next Sub-layer:";
+		next.rows.push_back(makeRow("[5] RETURN TO SUB-LAYER_0", "",
 			m_activePanelItem == 4));
-		p.sections.push_back(back);
+		p.sections.push_back(next);
 		return;
 	}
 
 	if (m_assemblyNode == AssemblyNode::Preview) {
+		p.subLayerPanelLayout =
+			WorkspaceSubLayerPanelLayout::AssemblyPreview;
 
 		WorkspacePanelSection injection;
 		injection.heading = "Volume Injection:";
-
-		injection.rows.push_back(
-			makeRow(
-				"[1]: INJECTION VOXELS", 
-				injectionVoxelName(), 
-				m_activePanelItem == 0)
-		);
-
+		injection.rows.push_back(makeRow("[1]: INJECTION VOXELS",
+			injectionVoxelName(), m_activePanelItem == 0));
 		p.sections.push_back(injection);
 
-		// --- NEXT NODE ---
 		WorkspacePanelSection nextNode;
-
 		nextNode.heading = "Next Node:";
-		nextNode.rows.push_back(makeRow("[2]: EDIT OBJ", "", m_activePanelItem == 1));
+		nextNode.rows.push_back(makeRow("[2]: EDIT OBJECT", "",
+			m_activePanelItem == 1));
 		p.sections.push_back(nextNode);
 
-		// --- Next/Prev Sub-Layer ---
 		WorkspacePanelSection traversal;
-
-		traversal.heading = "Next/Prev Sub-Layer:";
-		traversal.rows.push_back(makeRow("[3]: RUN MC_MODE", "", m_activePanelItem == 2));
-		traversal.rows.push_back(makeRow("[4]: RENDER SETUP", "", m_activePanelItem == 3));
-
+		traversal.heading = "Next / Previous Sub-Layer:";
+		traversal.rows.push_back(makeRow("[3]: RUN MC_MODE", "",
+			m_activePanelItem == 2));
+		traversal.rows.push_back(makeRow("[4]: RENDER SETUP", "",
+			m_activePanelItem == 3));
 		p.sections.push_back(traversal);
 		return;
 	}
 
-	static constexpr int rotationSteps[] = { 1, 20, 45, 90, 180 };
-	const char* target = isEditingInjectionVoxel1() ? "VOLUME_1" : "VOLUME_0";
+	const bool injection = hasInjectionVoxelSelected();
+	const bool volume1 = injection && isEditingInjectionVoxel1();
+	const char* target = volume1 ? "VOLUME_1" : "VOLUME_0";
+
 	if (m_assemblyNode == AssemblyNode::EditObject) {
 		WorkspacePanelSection edit;
-		edit.heading = hasInjectionVoxelSelected()
-			? "Select Volume To Edit:" : "=== Edit Volume_0 ===";
-		if (hasInjectionVoxelSelected())
-			edit.rows.push_back(makeRow("[1]: EDIT", target, m_activePanelItem == 0));
-		edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2]: SELECT OBJ" : "[1]: SELECT OBJ",
-			volumePrimitiveName(),
-			m_activePanelItem == (hasInjectionVoxelSelected() ? 1 : 0)));
-		if (!hasInjectionVoxelSelected() || isEditingInjectionVoxel0()) {
-			char degrees[24];
-			std::snprintf(degrees, sizeof(degrees), "%d",
-				rotationSteps[m_rotationIncrementIndex]);
-			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[3]: DEG" : "[2]: DEG", degrees,
-				m_activePanelItem == (hasInjectionVoxelSelected() ? 2 : 1)));
-			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[4]: OFFSET OBJ" : "[3]: OFFSET OBJ", "",
-				m_activePanelItem == (hasInjectionVoxelSelected() ? 3 : 2)));
-			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[5]: PREVIEW OBJ" : "[4]: PREVIEW OBJ", "",
-				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 3)));
+		if (!injection) {
+			p.subLayerPanelLayout =
+				WorkspaceSubLayerPanelLayout::AssemblyEditVolume0;
+			edit.heading = "=== Edit Volume_0 ===";
+			p.sections.push_back(edit);
+
+			WorkspacePanelSection primitives;
+			primitives.heading = "Object Primitives:";
+			primitives.rows.push_back(makeRow("[1] Select Object",
+				volumePrimitiveName(), m_activePanelItem == 0));
+			p.sections.push_back(primitives);
+
+			WorkspacePanelSection rotation;
+			rotation.heading = "Rotation Angle Increment:";
+			rotation.rows.push_back(makeRow("[2] Deg",
+				std::to_string(rotationIncrementDegrees()),
+				m_activePanelItem == 1));
+			p.sections.push_back(rotation);
+
+			WorkspacePanelSection traversal;
+			traversal.heading = "Next/Prev Node:";
+			traversal.rows.push_back(makeRow("[3] Offset Object", "",
+				m_activePanelItem == 2));
+			traversal.rows.push_back(makeRow("[4] Preview Object", "",
+				m_activePanelItem == 3));
+			char transform[240];
+			std::snprintf(transform, sizeof(transform),
+				"Scale %s %.2f/%.2f/%.2f/%.2f | Rot %s %.0f/%.0f/%.0f",
+				objectEditModeName(), m_volume0State.scaleWhole,
+				m_volume0State.scaleX, m_volume0State.scaleY,
+				m_volume0State.scaleZ, objectRotationModeName(),
+				m_volume0State.pitchDeg, m_volume0State.yawDeg,
+				m_volume0State.rollDeg);
+			traversal.notes.push_back(transform);
+			p.sections.push_back(traversal);
+			return;
+		}
+
+		p.subLayerPanelLayout = volume1
+			? WorkspaceSubLayerPanelLayout::AssemblyEditTargetVolume1
+			: WorkspaceSubLayerPanelLayout::AssemblyEditTargetVolume0;
+		edit.heading = "Select Volume To Edit:";
+		edit.rows.push_back(makeRow("[1] Edit", target, m_activePanelItem == 0));
+		edit.rows.push_back(makeRow("[2] Select Object",
+			volumePrimitiveName(), m_activePanelItem == 1));
+		p.sections.push_back(edit);
+
+		if (!volume1) {
+			WorkspacePanelSection rotation;
+			rotation.heading = "Rotation Angle Increment:";
+			rotation.rows.push_back(makeRow("[3] Deg",
+				std::to_string(rotationIncrementDegrees()),
+				m_activePanelItem == 2));
+			p.sections.push_back(rotation);
+
+			WorkspacePanelSection traversal;
+			traversal.heading = "Next/Prev Node:";
+			traversal.rows.push_back(makeRow("[4] Offset Object", "",
+				m_activePanelItem == 3));
+			traversal.rows.push_back(makeRow("[5] Preview Object", "",
+				m_activePanelItem == 4));
+			char transform[240];
+			std::snprintf(transform, sizeof(transform),
+				"Volume_0 | Scale %s %.2f/%.2f/%.2f/%.2f | Rot %s %.0f/%.0f/%.0f",
+				objectEditModeName(), m_volume0State.scaleWhole,
+				m_volume0State.scaleX, m_volume0State.scaleY,
+				m_volume0State.scaleZ, objectRotationModeName(),
+				m_volume0State.pitchDeg, m_volume0State.yawDeg,
+				m_volume0State.rollDeg);
+			traversal.notes.push_back(transform);
+			p.sections.push_back(traversal);
 		}
 		else {
-			edit.rows.push_back(makeRow("[3]: COMMIT BRUSH", "",
+			WorkspacePanelSection brush;
+			brush.heading = "Reset Injection Brush Base:";
+			brush.rows.push_back(makeRow("[3] Commit Brush Base", "",
 				m_activePanelItem == 2));
-			edit.rows.push_back(makeRow("[4]: MIRROR",
+			p.sections.push_back(brush);
+
+			WorkspacePanelSection mirror;
+			mirror.heading = "Mirrored Injection:";
+			mirror.rows.push_back(makeRow("[4] MIRROR",
 				m_mirrorMode == MirrorMode::On ? "ON" : "NONE",
 				m_activePanelItem == 3));
+			mirror.notes.push_back(
+				"Commit Brush Base bakes VOLUME_1 rotation into its local basis.");
+			mirror.notes.push_back("No fuse/cut is applied here.");
+			p.sections.push_back(mirror);
 		}
-		p.sections.push_back(edit);
 		return;
 	}
 
 	if (m_assemblyNode == AssemblyNode::OffsetObject) {
+		if (!injection) {
+			p.subLayerPanelLayout =
+				WorkspaceSubLayerPanelLayout::AssemblyOffsetVolume0;
+			WorkspacePanelSection offset;
+			offset.heading = "Offset Grid Vector:";
+			offset.rows.push_back(makeRow("[1] Offset", offsetVectorName(),
+				m_activePanelItem == 0));
+			char increment[32];
+			std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
+			offset.rows.push_back(makeRow("[2] Increments", increment,
+				m_activePanelItem == 1));
+			p.sections.push_back(offset);
+
+			WorkspacePanelSection traversal;
+			traversal.heading = "Next/Prev Node:";
+			std::string state = !m_volumeBoundarySensorReady ? "CHECKING"
+				: isSPVolumeBoundarySafe() ? "READY"
+				: "BLOCKED: " + std::to_string(m_volumeBoundaryUnsafeCount) +
+					" PATCHES";
+			WorkspacePanelRow apply = makeRow("[3] Apply To Base", state,
+				m_activePanelItem == 2);
+			apply.selectable = canApplyVolumeToBase();
+			apply.tone = apply.selectable
+				? WorkspaceStatusTone::Ready : WorkspaceStatusTone::Warning;
+			traversal.rows.push_back(apply);
+			traversal.rows.push_back(makeRow("[4] Edit Object", "",
+				m_activePanelItem == 3));
+			p.sections.push_back(traversal);
+			return;
+		}
+
+		p.subLayerPanelLayout = volume1
+			? WorkspaceSubLayerPanelLayout::AssemblyOffsetTargetVolume1
+			: WorkspaceSubLayerPanelLayout::AssemblyOffsetTargetVolume0;
+		WorkspacePanelSection targetSection;
+		targetSection.heading = "Edit Offset Volume:";
+		targetSection.rows.push_back(makeRow("[1] Select", target,
+			m_activePanelItem == 0));
+		p.sections.push_back(targetSection);
+
 		WorkspacePanelSection offset;
-		offset.heading = hasInjectionVoxelSelected()
-			? "Edit Offset Volume:" : "Offset Grid Vector:";
-		int row = 0;
-		if (hasInjectionVoxelSelected())
-			offset.rows.push_back(makeRow("[1]: SELECT", target,
-				m_activePanelItem == row++));
-		const char* axis = m_offsetVector == OffsetVector::Y ? "Y"
-			: m_offsetVector == OffsetVector::Z ? "Z" : "X";
-		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2]: OFFSET" : "[1]: OFFSET", axis, m_activePanelItem == row++));
+		offset.heading = "Offset Grid Vector:";
+		offset.rows.push_back(makeRow("[2] Offset", offsetVectorName(),
+			m_activePanelItem == 1));
 		char increment[32];
 		std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
-		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[3]: INCREMENTS" : "[2]: INCREMENTS", increment,
-			m_activePanelItem == row++));
-		if (hasInjectionVoxelSelected() && isEditingInjectionVoxel1()) {
-			offset.rows.push_back(makeRow("[4]: INJECT",
+		offset.rows.push_back(makeRow("[3] Increments", increment,
+			m_activePanelItem == 2));
+		p.sections.push_back(offset);
+
+		if (volume1) {
+			WorkspacePanelSection mode;
+			mode.heading = "Voxel Injection Mode:";
+			mode.rows.push_back(makeRow("[4] Inject",
 				m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE",
 				m_activePanelItem == 3));
+			mode.notes.push_back(
+				"VOLUME_1 offset edits the injection brush local placement.");
+			mode.notes.push_back(
+				"Switch to VOLUME_0 to drive rail depth and final apply.");
+			p.sections.push_back(mode);
 		}
 		else {
-			if (hasInjectionVoxelSelected()) {
-				char rail[32];
-				std::snprintf(rail, sizeof(rail), "%.2f", m_injectionRailT);
-				offset.rows.push_back(makeRow("[4]: INJECTION VECTOR", rail,
-					m_activePanelItem == 3));
-			}
-			const bool ready = canApplyVolumeToBase();
-			std::string state = !m_volumeBoundarySensorReady ? "CHECKING"
-				: ready ? "READY" : "BLOCKED: " +
-					std::to_string(m_volumeBoundaryUnsafeCount) + " PATCHES";
-			WorkspacePanelRow apply = makeRow(hasInjectionVoxelSelected()
-				? (m_injectionMode == InjectionMode::Cut
-					? "[5]: CUT VOXEL" : "[5]: FUSE VOXEL")
-				: "[3]: COMMIT TO BASE", state,
-				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 2));
-			apply.selectable = ready;
-			offset.rows.push_back(apply);
-			offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[6]: EDIT OBJ" : "[4]: EDIT OBJ", "",
-				m_activePanelItem == (hasInjectionVoxelSelected() ? 5 : 3)));
+			WorkspacePanelSection rail;
+			rail.heading = "Injection Rail:";
+			char railValue[32];
+			std::snprintf(railValue, sizeof(railValue), "%.2f", m_injectionRailT);
+			rail.rows.push_back(makeRow("[4] Injection Vector", railValue,
+				m_activePanelItem == 3));
+			p.sections.push_back(rail);
+
+			WorkspacePanelSection traversal;
+			traversal.heading = "Next/Prev Node:";
+			const bool cut = m_injectionMode == InjectionMode::Cut;
+			std::string state = cut ? "READY"
+				: !m_volumeBoundarySensorReady ? "CHECKING"
+				: isSPVolumeBoundarySafe() ? "READY"
+				: "BLOCKED: " + std::to_string(m_volumeBoundaryUnsafeCount) +
+					" PATCHES";
+			WorkspacePanelRow apply = makeRow(
+				cut ? "[5] Cut Voxel From Anchor" : "[5] Fuse Voxel To Anchor",
+				state, m_activePanelItem == 4);
+			apply.selectable = canApplyVolumeToBase();
+			apply.tone = apply.selectable
+				? WorkspaceStatusTone::Ready : WorkspaceStatusTone::Warning;
+			traversal.rows.push_back(apply);
+			traversal.rows.push_back(makeRow("[6] Edit Object", "",
+				m_activePanelItem == 5));
+			p.sections.push_back(traversal);
 		}
-		p.sections.push_back(offset);
 		return;
 	}
 
+	p.subLayerPanelLayout =
+		WorkspaceSubLayerPanelLayout::AssemblyApply;
 	WorkspacePanelSection apply;
-	apply.heading = std::string("Apply Operation Mode ") +
-		(m_injectionMode == InjectionMode::Cut ? "{ CUT }" : "{ FUSE }");
-	apply.rows.push_back(makeRow("[1]: COMMIT / Loop Back To Preview", "",
+	apply.heading = std::string("Apply Operation Mode { ") +
+		(m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE") + " }";
+	apply.rows.push_back(makeRow("[1] Commit / Loop Back To Preview", "",
 		m_activePanelItem == 0));
-	apply.rows.push_back(makeRow("[2]: PREVIEW OBJ", "",
-		m_activePanelItem == 2));
-	apply.rows.push_back(makeRow("[3]: OFFSET OBJ", "",
-		m_activePanelItem == 1));
 	p.sections.push_back(apply);
+
+	WorkspacePanelSection traversal;
+	traversal.heading = "Next/Prev Node:";
+	traversal.rows.push_back(makeRow("[2] Preview Object", "",
+		m_activePanelItem == 2));
+	traversal.rows.push_back(makeRow("[3] Offset Object", "",
+		m_activePanelItem == 1));
+	p.sections.push_back(traversal);
 }
+
 
 const char* SingleParticleWorkspace::workspaceName() const {
 	switch (m_grid3DWorkspace) {
@@ -2156,7 +2481,7 @@ string SingleParticleWorkspace::buildRuntimeObjectLine() const {
 		getActiveVolumeState();
 
 	// =========================================================
-	// NODE 2 — OFFSET
+	// NODE 2 - OFFSET
 	// =========================================================
 	if (m_assemblyNode == AssemblyNode::OffsetObject) {
 
@@ -2715,6 +3040,25 @@ bool SingleParticleWorkspace::canApplyVolumeToBase() const {
 	if (hasInjectionVoxelSelected() && m_injectionMode == InjectionMode::Cut)
 		return true;
 	return isSPVolumeBoundarySafe();
+}
+
+void SingleParticleWorkspace::finalizeCommittedBase() {
+	m_assemblyNode = AssemblyNode::Preview;
+	m_activePanelItem = 0;
+	m_injectionVoxel = InjectionVoxel::None;
+	m_editTarget = EditTarget::Volume0;
+	m_mirrorMode = MirrorMode::None;
+	m_objectEditMode = ObjectEditMode::ScaleWhole;
+	m_objectRotationMode = ObjectRotationMode::Pitch;
+	m_objectTransformMode = ObjectTransformMode::Scale;
+	resetVolumeState(m_volume0State, VOLUME_PRIMITIVE_BASE);
+	resetVolumeState(m_volume1State, VOLUME_PRIMITIVE_SPHERE);
+	m_offsetVector = OffsetVector::X;
+	m_injectionRailT = 0.0f;
+	m_volumeBoundarySensorReady = false;
+	m_volumeBoundaryUnsafeCount = 0;
+	clearSPOverlapPreviewStatus();
+	m_volumeDirty = true;
 }
 
 SingleParticleWorkspace::SPVolumeBasis

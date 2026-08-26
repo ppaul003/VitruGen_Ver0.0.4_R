@@ -309,6 +309,8 @@ public:
 		const int3& sourceSize);
 
 	MarchingCubes* marchingCubes() const { return m_marchingCubes.get(); }
+	bool prepareMarchingCubesExport();
+	void activateExportedMeshRender();
 	bool hasCommittedGeometry() const { return m_hasCommittedGeometry; }
 	float particleRadius() const { return m_particleRadius; }
 	void activateLoadedStaticParticleBase(bool editableVolumeRestored);
@@ -568,6 +570,9 @@ private:
 	void commitObjectRotationToBasis();
 	void commitBrushBase();
 	bool canApplyVolumeToBase() const;
+	void finalizeCommittedBase();
+	void returnFromMarchingCubesToPreview();
+	void returnFromMarchingCubesToReference();
 
 private:
 	static constexpr float kParticleWorldBoundary = 1.0f;

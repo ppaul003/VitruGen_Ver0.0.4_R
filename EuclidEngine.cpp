@@ -386,9 +386,8 @@ void EuclidEngine::initMenus() {
 		MENU_NOP
 	);
 
-	glutAttachMenu(
-		GLUT_RIGHT_BUTTON
-	);
+	if (!isAnyHostModalActive())
+		glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
 
 
@@ -406,11 +405,6 @@ void EuclidEngine::shutdown() {
 		"[EuclidEngine] Shutting down...\n"
 	);
 
-	if (m_renderer) {
-		delete m_renderer;
-		m_renderer = nullptr;
-	}
-
 	if (m_objExportFutureActive && m_objExportFuture.valid()) {
 		m_objExportFuture.wait();
 		m_objExportFutureActive = false;
@@ -419,6 +413,13 @@ void EuclidEngine::shutdown() {
 	if (m_staticAssetFutureActive && m_staticAssetFuture.valid()) {
 		m_staticAssetFuture.wait();
 		m_staticAssetFutureActive = false;
+	}
+
+	m_tesseract.shutdown();
+
+	if (m_renderer) {
+		delete m_renderer;
+		m_renderer = nullptr;
 	}
 
 #ifdef _WIN32
@@ -505,6 +506,7 @@ void EuclidEngine::sPassiveMotion(int x, int y) {
 void EuclidEngine::sMainMenu(int value) {
 
 	if (!s_instance) return;
+	if (s_instance->isAnyHostModalActive()) return;
 	if (value == MENU_NOP) return;
 	if (value >= MENU_WORKSPACE_COMMAND_BASE) {
 		const int slot = value - MENU_WORKSPACE_COMMAND_BASE;
@@ -623,16 +625,17 @@ void EuclidEngine::onDisplay() {
 
 	m_viewport.drawOverlay(
 		presentation,
-		isStaticParticleAssetModalActive()
-		? &m_staticAssetPanel
-		: nullptr
+		isObjExportModalActive()
+		? &m_objExportPanel
+		: isStaticParticleAssetModalActive()
+		? &m_staticAssetPanel : nullptr
 	);
 
 	glutSwapBuffers();
 }
 
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
-	if (isStaticParticleAssetModalActive()) return;
+	if (isAnyHostModalActive()) return;
 	// ---------------------------------------------------------
 	// Layer 0 / domain transitions are keyboard-driven.
 	//
@@ -683,7 +686,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 
 void EuclidEngine::onMotion(int x, int y) {
 
-	if (isStaticParticleAssetModalActive())
+	if (isAnyHostModalActive())
 		return;
 
 	const TheArbiter::ArbiterResult result =
@@ -706,7 +709,7 @@ void EuclidEngine::onMotion(int x, int y) {
 }
 
 void EuclidEngine::onPassiveMotion(int x, int y) {
-	if (isStaticParticleAssetModalActive()) return;
+	if (isAnyHostModalActive()) return;
 	if (m_arbiter.isGlobalShell() || 
 		m_tesseract.domainTransitionActive()) return;
 
@@ -725,6 +728,13 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	const KeyboardInput::KeyEvent event =
 		m_keyboard.onKey(key, x, y);
+
+	// GOLD modal priority: OBJ, then named asset persistence,
+	// then any remaining generic host workflow.
+	if (handleObjExportModalKeyboard(event)) {
+		glutPostRedisplay();
+		return;
+	}
 
 	// ---------------------------------------------------------
 	// GOLD static asset modal has absolute input priority.
@@ -804,6 +814,7 @@ void EuclidEngine::onIdle() {
 	// updated.
 	// ---------------------------------------------------------
 	advanceStaticParticleAssetJob();
+	advanceObjExportJob();
 
 	const WorkspaceFrameContext frame =
 		buildWorkspaceFrameContext(deltaTime);
@@ -820,7 +831,7 @@ void EuclidEngine::onClose() {
 }
 
 void EuclidEngine::openStaticParticleLoadPanel() {
-	if (isStaticParticleAssetModalActive() ||
+	if (isAnyHostModalActive() ||
 		m_staticAssetFutureActive) return;
 
 	m_staticAssetCatalog =
@@ -850,7 +861,24 @@ void EuclidEngine::openStaticParticleLoadPanel() {
 	}
 
 	m_staticAssetJobKind = StaticAssetJobKind::Load;
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
 
+	glutPostRedisplay();
+}
+
+void EuclidEngine::openStaticParticleSaveAsPanel() {
+	if (isAnyHostModalActive() || m_staticAssetFutureActive) return;
+
+	m_hostTextEntry.beginAssetName(
+		"STATIC PARTICLE ASSET NAME", "", 64);
+	m_staticAssetPanel = ViewPort::ObjExportPanelData{};
+	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::NAME_ENTRY;
+	m_staticAssetPanel.titleText = "VITRUGEN STATIC PARTICLE SAVE AS";
+	m_staticAssetPanel.promptText = m_hostTextEntry.getPrompt();
+	m_staticAssetPanel.inputText = m_hostTextEntry.getBuffer();
+	m_staticAssetPanel.statusText = m_hostTextEntry.getStatusMessage();
+	m_staticAssetJobKind = StaticAssetJobKind::Save;
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
 	glutPostRedisplay();
 }
 
@@ -888,6 +916,7 @@ void EuclidEngine::openStaticParticleSaveConfirm(
 	m_staticAssetPanel.confirmText = "Save named asset: " + m_pendingStaticAssetName + " ?";
 	m_staticAssetPanel.yesSelected = true;
 	m_staticAssetJobKind = StaticAssetJobKind::Save;
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
 	glutPostRedisplay();
 }
 
@@ -1106,6 +1135,8 @@ void EuclidEngine::closeStaticParticleAssetPanel() {
 	m_staticAssetCatalog.clear();
 	m_staticAssetJobKind = StaticAssetJobKind::None;
 	m_pendingStaticAssetName.clear();
+	m_hostTextEntry.reset();
+	rebuildMenus();
 	glutPostRedisplay();
 }
 
@@ -1113,6 +1144,23 @@ bool EuclidEngine::handleStaticParticleAssetModalKeyboard(const KeyboardInput::K
 
 	if (!isStaticParticleAssetModalActive()) return false;
 	using Mode = ViewPort::ObjExportPanelMode;
+
+	if (m_staticAssetPanel.mode == Mode::NAME_ENTRY) {
+		const TextEntryAction action =
+			m_hostTextEntry.handleRawKey(event.rawKey);
+		m_staticAssetPanel.inputText = m_hostTextEntry.getBuffer();
+		m_staticAssetPanel.statusText = m_hostTextEntry.getStatusMessage();
+		if (action == TextEntryAction::Committed) {
+			const std::string name = m_hostTextEntry.getNormalizedText();
+			m_hostTextEntry.reset();
+			openStaticParticleSaveConfirm(name);
+		}
+		else if (action == TextEntryAction::Cancelled) {
+			closeStaticParticleAssetPanel();
+		}
+		glutPostRedisplay();
+		return true;
+	}
 
 	// --- SELECT --- //
 	if (m_staticAssetPanel.mode == Mode::SELECT) {
@@ -1152,8 +1200,8 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 	switch (m_tesseract.takeSingleParticleHostRequest()) {
 	case Request::LoadStaticParticle: openStaticParticleLoadPanel(); break;
 	case Request::SaveStaticParticle: openStaticParticleSaveConfirm(""); break;
-	//case Request::SaveStaticParticleAs: beginStaticParticleSave(true); break;
-	case Request::ExportObj: exportCurrentSingleParticleObj(); break;
+	case Request::SaveStaticParticleAs: openStaticParticleSaveAsPanel(); break;
+	case Request::ExportObj: exportCurrentMeshOBJ(); break;
 	default: break;
 	}
 }
@@ -1203,23 +1251,365 @@ bool EuclidEngine::makeCurrentStaticParticleAsset(
 	return true;
 }
 
-void EuclidEngine::exportCurrentSingleParticleObj() {
-	vitru::StaticParticleAsset asset;
-	if (!makeCurrentStaticParticleAsset(asset)) {
-		m_hostModalMode = HostModalMode::Failed;
-		m_hostModalMessage = "No canonical mesh is available for OBJ export.";
+void EuclidEngine::exportCurrentMeshOBJ() {
+	if (isAnyHostModalActive()) return;
+
+	m_objExportPanel = ViewPort::ObjExportPanelData{};
+	m_objExportPanel.mode = ViewPort::ObjExportPanelMode::CONFIRM;
+	m_objExportPanel.titleText = "VITRUGEN OBJ EXPORT";
+	m_objExportPanel.confirmText = "Confirm Export .OBJ?";
+	m_objExportPanel.yesSelected = true;
+	m_objExportPanel.statusText = "Awaiting confirmation";
+	m_objExportStage = ObjExportStage::NONE;
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
+	glutPostRedisplay();
+}
+
+void EuclidEngine::appendObjExportLog(const string& line) {
+	m_objExportPanel.logLines.push_back(line);
+	if (m_objExportPanel.logLines.size() > 64)
+		m_objExportPanel.logLines.erase(m_objExportPanel.logLines.begin());
+}
+
+void EuclidEngine::failObjExportJob(const string& reason) {
+	appendObjExportLog("[EuclidEngine] ERROR: " + reason);
+	m_objExportPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+	m_objExportPanel.statusText = reason;
+	m_objExportStage = ObjExportStage::NONE;
+	m_objExportFutureActive = false;
+	glutPostRedisplay();
+}
+
+void EuclidEngine::closeObjExportPanel() {
+	if (m_objExportFutureActive) return;
+	m_objExportPanel = ViewPort::ObjExportPanelData{};
+	m_objExportStage = ObjExportStage::NONE;
+	rebuildMenus();
+	glutPostRedisplay();
+}
+
+void EuclidEngine::beginObjExportJob() {
+	m_objExportPanel.mode = ViewPort::ObjExportPanelMode::WORKING;
+	m_objExportPanel.titleText = "VITRUGEN OBJ EXPORT PIPELINE";
+	m_objExportPanel.progressPercent = 5;
+	m_objExportPanel.spinnerFrame = 0;
+	m_objExportPanel.logLines.clear();
+	m_objExportPanel.statusText = "Preparing Marching Cubes mesh";
+	m_objExportStage = ObjExportStage::PREPARE_MESH;
+	const int now = glutGet(GLUT_ELAPSED_TIME);
+	m_objExportNextStepMs = now + 120;
+	m_objExportLastSpinnerMs = now;
+	glutPostRedisplay();
+}
+
+bool EuclidEngine::handleObjExportModalKeyboard(
+	const KeyboardInput::KeyEvent& event) {
+	if (!isObjExportModalActive()) return false;
+	using Mode = ViewPort::ObjExportPanelMode;
+
+	if (m_objExportPanel.mode == Mode::CONFIRM) {
+		switch (event.signal) {
+		case KeyboardInput::KEY_W:
+		case KeyboardInput::KEY_S:
+		case KeyboardInput::KEY_A:
+		case KeyboardInput::KEY_D:
+			m_objExportPanel.yesSelected = !m_objExportPanel.yesSelected;
+			break;
+		case KeyboardInput::KEY_1:
+			m_objExportPanel.yesSelected = true;
+			break;
+		case KeyboardInput::KEY_2:
+			m_objExportPanel.yesSelected = false;
+			break;
+		case KeyboardInput::KEY_E:
+		case KeyboardInput::KEY_ENTER:
+			if (m_objExportPanel.yesSelected) beginObjExportJob();
+			else closeObjExportPanel();
+			break;
+		case KeyboardInput::KEY_Q:
+		case KeyboardInput::KEY_ESCAPE:
+			closeObjExportPanel();
+			break;
+		default:
+			break;
+		}
+		return true;
+	}
+
+	if (m_objExportPanel.mode == Mode::WORKING) return true;
+	if (event.signal == KeyboardInput::KEY_E ||
+		event.signal == KeyboardInput::KEY_ENTER ||
+		event.signal == KeyboardInput::KEY_Q ||
+		event.signal == KeyboardInput::KEY_ESCAPE)
+		closeObjExportPanel();
+	return true;
+}
+
+void EuclidEngine::advanceObjExportJob() {
+	using namespace std::chrono;
+	const int now = glutGet(GLUT_ELAPSED_TIME);
+
+	if (m_objExportPanel.mode == ViewPort::ObjExportPanelMode::COMPLETE) {
+		if (now >= m_objExportCompleteUntilMs) closeObjExportPanel();
 		return;
 	}
-	std::string error;
-	const fs::path path = m_objExportPath;
-	if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
-	if (!vitru::writeStaticParticleObj(asset, path, "", &error)) {
-		m_hostModalMode = HostModalMode::Failed;
-		m_hostModalMessage = error.empty() ? "OBJ export failed." : error;
+	if (!isObjExportWorking()) return;
+
+	if (now - m_objExportLastSpinnerMs >= 100) {
+		m_objExportPanel.spinnerFrame =
+			(m_objExportPanel.spinnerFrame + 1) % 4;
+		m_objExportLastSpinnerMs = now;
+	}
+
+	MarchingCubes* marchingCubes =
+		m_tesseract.singleParticleMarchingCubes();
+
+	if (m_objExportStage == ObjExportStage::WAIT_FOR_FILE_WRITE) {
+		if (!m_objExportFutureActive || !m_objExportFuture.valid()) {
+			failObjExportJob("OBJ writer task became invalid.");
+			return;
+		}
+		if (m_objExportFuture.wait_for(milliseconds(0)) !=
+			future_status::ready) return;
+		const bool succeeded = m_objExportFuture.get();
+		m_objExportFutureActive = false;
+		if (!succeeded || !marchingCubes) {
+			failObjExportJob("MarchingCubes::exportOBJ() failed.");
+			return;
+		}
+
+		char line[512];
+		snprintf(line, sizeof(line),
+			"[MarchingCubes3D] exportOBJ success: '%s' vertices=%zu triangles=%zu normals=YES indexed=YES",
+			m_objExportPath.c_str(),
+			marchingCubes->getCanonicalMesh().positions.size(),
+			marchingCubes->getCanonicalMesh().triangleCount());
+		appendObjExportLog(line);
+		const vitru::MeshProcessingReport& report =
+			marchingCubes->getMeshProcessingReport();
+		snprintf(line, sizeof(line),
+			"[MeshProcessor] rawV=%zu rawT=%zu finalV=%zu finalT=%zu removed=%zu welded=%zu radius=%.6f",
+			report.rawVertexCount, report.rawTriangleCount,
+			report.finalVertexCount, report.finalTriangleCount,
+			report.removedNonFiniteTriangles +
+			report.removedDegenerateTriangles +
+			report.removedDuplicateTriangles,
+			report.weldedVertexInstances, report.bounds.radius);
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 70;
+		m_objExportPanel.statusText = "OBJ file written";
+		m_objExportStage = ObjExportStage::REPORT_FILE_WRITTEN;
+		m_objExportNextStepMs = now + 140;
 		return;
 	}
-	m_hostModalMode = HostModalMode::Complete;
-	m_hostModalMessage = "OBJ written: " + path.generic_string();
+
+	if (now < m_objExportNextStepMs) return;
+	char line[512];
+
+	switch (m_objExportStage) {
+	case ObjExportStage::PREPARE_MESH:
+		appendObjExportLog("[EuclidEngine] Marching Cubes initialized.");
+		m_objExportPanel.progressPercent = 10;
+		m_objExportPanel.statusText = "Extracting Marching Cubes mesh";
+		if (!m_tesseract.prepareSingleParticleMarchingCubesExport()) {
+			failObjExportJob("No valid Marching Cubes triangle mesh.");
+			return;
+		}
+		marchingCubes = m_tesseract.singleParticleMarchingCubes();
+		m_objExportStage = ObjExportStage::REPORT_CLASSIFICATION;
+		break;
+
+	case ObjExportStage::REPORT_CLASSIFICATION:
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		snprintf(line, sizeof(line),
+			"[MarchingCubes3D] classifyOnly: iso=%.4f, activeVoxels=%u, totalVerts=%u",
+			0.0f, marchingCubes->getActiveVoxelCount(),
+			marchingCubes->getTotalVertexCount());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 20;
+		m_objExportPanel.statusText = "Voxel classification complete";
+		m_objExportStage = ObjExportStage::REPORT_MC_VBO;
+		break;
+
+	case ObjExportStage::REPORT_MC_VBO:
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		snprintf(line, sizeof(line),
+			"[MarchingCubes3D] Created mesh VBOs: verts=%u, bytes=%zu each",
+			marchingCubes->getAllocatedMeshVertexCount(),
+			marchingCubes->getMeshVBOBytesEach());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 25;
+		m_objExportPanel.statusText = "Marching Cubes VBO ready";
+		m_objExportStage = ObjExportStage::REPORT_BOUNDS;
+		break;
+
+	case ObjExportStage::REPORT_BOUNDS:
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		appendObjExportLog("[MarchingCubes3D] mesh bounds:");
+		if (marchingCubes->hasMeshBounds()) {
+			const float3 minValue = marchingCubes->getMeshMin();
+			const float3 maxValue = marchingCubes->getMeshMax();
+			const float3 centerValue = marchingCubes->getMeshCenter();
+			snprintf(line, sizeof(line), "  min    = %.4f %.4f %.4f",
+				minValue.x, minValue.y, minValue.z); appendObjExportLog(line);
+			snprintf(line, sizeof(line), "  max    = %.4f %.4f %.4f",
+				maxValue.x, maxValue.y, maxValue.z); appendObjExportLog(line);
+			snprintf(line, sizeof(line), "  center = %.4f %.4f %.4f",
+				centerValue.x, centerValue.y, centerValue.z); appendObjExportLog(line);
+		}
+		else appendObjExportLog("  bounds unavailable");
+		m_objExportPanel.progressPercent = 30;
+		m_objExportPanel.statusText = "Mesh bounds calculated";
+		m_objExportStage = ObjExportStage::REPORT_EXTRACTION;
+		break;
+
+	case ObjExportStage::REPORT_EXTRACTION:
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		snprintf(line, sizeof(line),
+			"[MarchingCubes3D] extract: activeVoxels=%u, totalVerts=%u, triangles=%u",
+			marchingCubes->getActiveVoxelCount(),
+			marchingCubes->getTotalVertexCount(),
+			marchingCubes->getGeneratedTriangleCount());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 40;
+		m_objExportPanel.statusText = "Triangle extraction complete";
+		m_objExportStage = ObjExportStage::REPORT_ENGINE_EXTRACTION;
+		break;
+
+	case ObjExportStage::REPORT_ENGINE_EXTRACTION:
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		snprintf(line, sizeof(line),
+			"[EuclidEngine] MC extract complete: verts=%u tris=%u valid=YES",
+			marchingCubes->getTotalVertexCount(),
+			marchingCubes->getGeneratedTriangleCount());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 50;
+		m_objExportPanel.statusText = "Preparing file writer";
+		m_objExportStage = ObjExportStage::BEGIN_FILE_WRITE;
+		break;
+
+	case ObjExportStage::BEGIN_FILE_WRITE: {
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		const fs::path outputPath(m_objExportPath);
+		std::error_code error;
+		if (!outputPath.parent_path().empty())
+			fs::create_directories(outputPath.parent_path(), error);
+		if (error) { failObjExportJob("OBJ output directory could not be created."); return; }
+		m_objExportPanel.progressPercent = 60;
+		m_objExportPanel.statusText = "Writing vertices, normals and faces";
+		const string path = m_objExportPath;
+		m_objExportFuture = async(launch::async,
+			[marchingCubes, path]() {
+				return marchingCubes->exportOBJ(path.c_str(), true);
+			});
+		m_objExportFutureActive = true;
+		m_objExportStage = ObjExportStage::WAIT_FOR_FILE_WRITE;
+		return;
+	}
+
+	case ObjExportStage::REPORT_FILE_WRITTEN:
+		snprintf(line, sizeof(line), "[EuclidEngine] Exported OBJ: %s",
+			m_objExportPath.c_str());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 75;
+		m_objExportPanel.statusText = "Preparing OBJ mesh reload";
+		m_objExportStage = ObjExportStage::BEGIN_MESH_RELOAD;
+		break;
+
+	case ObjExportStage::BEGIN_MESH_RELOAD:
+		m_objExportPanel.progressPercent = 80;
+		m_objExportPanel.statusText = "Uploading exported mesh";
+		m_objExportStage = ObjExportStage::RELOAD_MESH;
+		break;
+
+	case ObjExportStage::RELOAD_MESH: {
+		if (!m_renderer) { failObjExportJob("Renderer unavailable."); return; }
+		if (!marchingCubes) { failObjExportJob("Marching Cubes unavailable."); return; }
+		m_renderer->clearParticleMeshOBJ();
+		if (!m_renderer->loadParticleMeshOBJ(m_objExportPath.c_str())) {
+			failObjExportJob("Generated OBJ could not be reloaded.");
+			return;
+		}
+		snprintf(line, sizeof(line),
+			"[EuclidRenderer] OBJ mesh uploaded: vbo=%u vertices=%d bytes=%zu",
+			static_cast<unsigned int>(m_renderer->getParticleMeshVBO()),
+			static_cast<int>(m_renderer->getParticleMeshVertexCount()),
+			m_renderer->getParticleMeshBufferBytes());
+		appendObjExportLog(line);
+
+		if (marchingCubes->getCanonicalMesh().bounds.valid) {
+			const vitru::MeshBounds& exported =
+				marchingCubes->getCanonicalMesh().bounds;
+			const glm::vec3 loadedMin = m_renderer->getParticleMeshMin();
+			const glm::vec3 loadedMax = m_renderer->getParticleMeshMax();
+			const glm::vec3 loadedCenter = m_renderer->getParticleMeshCenter();
+			const float loadedExtent = m_renderer->getParticleMeshMaxExtent();
+			float delta = fabsf(loadedExtent - exported.maxAxisExtent);
+			delta = (std::max)(delta, fabsf(loadedMin.x - exported.min.x));
+			delta = (std::max)(delta, fabsf(loadedMin.y - exported.min.y));
+			delta = (std::max)(delta, fabsf(loadedMin.z - exported.min.z));
+			delta = (std::max)(delta, fabsf(loadedMax.x - exported.max.x));
+			delta = (std::max)(delta, fabsf(loadedMax.y - exported.max.y));
+			delta = (std::max)(delta, fabsf(loadedMax.z - exported.max.z));
+			delta = (std::max)(delta, fabsf(loadedCenter.x - exported.center.x));
+			delta = (std::max)(delta, fabsf(loadedCenter.y - exported.center.y));
+			delta = (std::max)(delta, fabsf(loadedCenter.z - exported.center.z));
+			const size_t loadedTriangles = static_cast<size_t>(
+				m_renderer->getParticleMeshVertexCount()) / 3u;
+			const bool pass = loadedTriangles ==
+				marchingCubes->getCanonicalMesh().triangleCount() &&
+				delta <= 1.0e-5f;
+			snprintf(line, sizeof(line),
+				"[OBJ Roundtrip] triangles=%zu/%zu maxBoundsDelta=%.8f extent=%.6f/%.6f %s",
+				loadedTriangles,
+				marchingCubes->getCanonicalMesh().triangleCount(),
+				delta, loadedExtent, exported.maxAxisExtent,
+				pass ? "PASS" : "MISMATCH");
+			appendObjExportLog(line);
+		}
+		m_objExportPanel.statusText = "GPU mesh upload complete";
+		m_objExportStage = ObjExportStage::REPORT_MESH_LOADED;
+		break;
+	}
+
+	case ObjExportStage::REPORT_MESH_LOADED:
+		snprintf(line, sizeof(line),
+			"[EuclidRenderer] Loaded particle mesh OBJ: %s vertices=%d triangles=%d maxExtent=%.6f",
+			m_objExportPath.c_str(),
+			static_cast<int>(m_renderer->getParticleMeshVertexCount()),
+			static_cast<int>(m_renderer->getParticleMeshVertexCount() / 3),
+			m_renderer->getParticleMeshMaxExtent());
+		appendObjExportLog(line);
+		m_objExportPanel.progressPercent = 90;
+		m_objExportPanel.statusText = "Mesh reload verified";
+		m_objExportStage = ObjExportStage::ACTIVATE_MESH_MODE;
+		break;
+
+	case ObjExportStage::ACTIVATE_MESH_MODE:
+		m_tesseract.activateSingleParticleExportedMeshRender();
+		appendObjExportLog(
+			"[EuclidEngine] SINGLE_PARTICLE render mode automatically set to MESH.");
+		m_objExportPanel.progressPercent = 99;
+		m_objExportPanel.statusText = "Finalizing export";
+		m_objExportStage = ObjExportStage::FINISH;
+		break;
+
+	case ObjExportStage::FINISH:
+		m_objExportPanel.progressPercent = 100;
+		m_objExportPanel.mode = ViewPort::ObjExportPanelMode::COMPLETE;
+		m_objExportPanel.statusText = "Export complete";
+		m_objExportCompleteUntilMs = now + 1400;
+		m_objExportStage = ObjExportStage::NONE;
+		glutPostRedisplay();
+		return;
+
+	default:
+	case ObjExportStage::NONE:
+	case ObjExportStage::WAIT_FOR_FILE_WRITE:
+		return;
+	}
+
+	m_objExportNextStepMs = now + 140;
 }
 
 bool EuclidEngine::handleHostModalKeyboard(unsigned char rawKey) {
@@ -1329,4 +1719,15 @@ bool EuclidEngine::isObjExportModalActive() const {
 
 	return m_objExportPanel.mode !=
 		ViewPort::ObjExportPanelMode::HIDDEN;
+}
+
+bool EuclidEngine::isObjExportWorking() const {
+	return m_objExportPanel.mode ==
+		ViewPort::ObjExportPanelMode::WORKING;
+}
+
+bool EuclidEngine::isAnyHostModalActive() const {
+	return isObjExportModalActive() ||
+		isStaticParticleAssetModalActive() ||
+		m_hostModalMode != HostModalMode::Hidden;
 }

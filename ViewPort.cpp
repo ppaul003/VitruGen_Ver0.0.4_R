@@ -975,8 +975,20 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 			);
 		}
 		else {
-			
-			glColor4f(0.72f, 0.78f, 0.82f, alpha);
+			switch (row.tone) {
+			case WorkspaceStatusTone::Ready:
+				glColor4f(0.45f, 1.0f, 0.65f, alpha);
+				break;
+			case WorkspaceStatusTone::Caution:
+				glColor4f(0.95f, 0.82f, 0.30f, alpha);
+				break;
+			case WorkspaceStatusTone::Warning:
+				glColor4f(1.0f, 0.38f, 0.08f, alpha);
+				break;
+			default:
+				glColor4f(0.72f, 0.78f, 0.82f, alpha);
+				break;
+			}
 		}
 
 		string line = row.label;
@@ -995,6 +1007,208 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 			GLUT_BITMAP_HELVETICA_18
 		);
 	};
+
+	auto drawExplicitTitle = [&](float y,
+		const WorkspacePanelSection& section) {
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+		drawText2D(sectionX, y, section.heading.c_str(),
+			GLUT_BITMAP_HELVETICA_18);
+	};
+
+	auto drawNote = [&](float y, const string& note) {
+		glColor4f(0.72f, 0.78f, 0.82f, alpha);
+		drawText2D(sectionX, y, note.c_str(),
+			GLUT_BITMAP_HELVETICA_12);
+	};
+
+	auto drawInfoRow = [&](float y, const WorkspacePanelRow& row) {
+		switch (row.tone) {
+		case WorkspaceStatusTone::Ready:
+			glColor4f(0.45f, 1.0f, 0.65f, alpha);
+			break;
+		case WorkspaceStatusTone::Caution:
+			glColor4f(0.95f, 0.82f, 0.30f, alpha);
+			break;
+		case WorkspaceStatusTone::Warning:
+			glColor4f(1.0f, 0.50f, 0.25f, alpha);
+			break;
+		default:
+			glColor4f(0.72f, 0.78f, 0.82f, alpha);
+			break;
+		}
+		string line = row.label;
+		if (!row.value.empty()) {
+			line += " ";
+			line += row.value;
+		}
+		drawText2D(sectionX, y, line.c_str(),
+			GLUT_BITMAP_HELVETICA_12);
+	};
+
+	auto drawGoldFooter = [&]() {
+		drawDivider(y1 - 92.0f);
+		glColor4f(0.75f, 0.75f, 0.75f, alpha);
+		drawText2D(sectionX, y1 - 58.0f,
+			"W/S: Select    A/D: Change value    E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12);
+		glLineWidth(1.0f);
+	};
+
+	using SubLayout = WorkspaceSubLayerPanelLayout;
+	const SubLayout explicitLayout = presentation.subLayerPanelLayout;
+
+	// GOLD Sub-Layer 2/3 coordinates. The workspace selects a
+	// semantic layout; ViewPort remains responsible for geometry.
+	if (explicitLayout == SubLayout::MarchingCubesReport &&
+		presentation.sections.size() >= 4) {
+		if (!presentation.panelContextLine.empty()) {
+			glColor4f(0.72f, 0.78f, 0.82f, alpha);
+			drawText2D(sectionX, y0 + 108.0f,
+				presentation.panelContextLine.c_str(),
+				GLUT_BITMAP_HELVETICA_18);
+		}
+		drawExplicitTitle(y0 + 140.0f, presentation.sections[0]);
+		const auto& reportRows = presentation.sections[0].rows;
+		for (size_t i = 0; i < reportRows.size() && i < 4; ++i)
+			drawInfoRow(y0 + 166.0f + 22.0f * static_cast<float>(i),
+				reportRows[i]);
+		drawDivider(y0 + 254.0f);
+
+		drawExplicitTitle(y0 + 292.0f, presentation.sections[1]);
+		if (presentation.sections[1].rows.size() >= 3) {
+			drawSubRow(y0 + 334.0f, presentation.sections[1].rows[0]);
+			drawSubRow(y0 + 376.0f, presentation.sections[1].rows[1]);
+			drawSubRow(y0 + 418.0f, presentation.sections[1].rows[2]);
+		}
+		drawDivider(y0 + 454.0f);
+
+		drawExplicitTitle(y0 + 494.0f, presentation.sections[2]);
+		if (!presentation.sections[2].rows.empty())
+			drawSubRow(y0 + 536.0f, presentation.sections[2].rows[0]);
+		drawDivider(y0 + 572.0f);
+
+		drawExplicitTitle(y0 + 612.0f, presentation.sections[3]);
+		if (!presentation.sections[3].rows.empty())
+			drawSubRow(y0 + 654.0f, presentation.sections[3].rows[0]);
+		drawGoldFooter();
+		return;
+	}
+
+	if (explicitLayout != SubLayout::Automatic &&
+		explicitLayout != SubLayout::AssemblyPreview) {
+		drawDivider(y0 + 190.0f);
+
+		if (explicitLayout == SubLayout::AssemblyEditVolume0 &&
+			presentation.sections.size() >= 4) {
+			drawExplicitTitle(y0 + 224.0f, presentation.sections[0]);
+			drawExplicitTitle(y0 + 258.0f, presentation.sections[1]);
+			if (!presentation.sections[1].rows.empty())
+				drawSubRow(y0 + 298.0f, presentation.sections[1].rows[0]);
+			drawDivider(y0 + 328.0f);
+			drawExplicitTitle(y0 + 364.0f, presentation.sections[2]);
+			if (!presentation.sections[2].rows.empty())
+				drawSubRow(y0 + 404.0f, presentation.sections[2].rows[0]);
+			drawDivider(y0 + 434.0f);
+			drawExplicitTitle(y0 + 470.0f, presentation.sections[3]);
+			if (presentation.sections[3].rows.size() >= 2) {
+				drawSubRow(y0 + 510.0f, presentation.sections[3].rows[0]);
+				drawSubRow(y0 + 550.0f, presentation.sections[3].rows[1]);
+			}
+			if (!presentation.sections[3].notes.empty())
+				drawNote(y0 + 636.0f, presentation.sections[3].notes[0]);
+		}
+		else if ((explicitLayout == SubLayout::AssemblyEditTargetVolume0 ||
+			explicitLayout == SubLayout::AssemblyEditTargetVolume1) &&
+			presentation.sections.size() >= 3) {
+			drawExplicitTitle(y0 + 224.0f, presentation.sections[0]);
+			if (presentation.sections[0].rows.size() >= 2) {
+				drawSubRow(y0 + 266.0f, presentation.sections[0].rows[0]);
+				drawSubRow(y0 + 306.0f, presentation.sections[0].rows[1]);
+			}
+			drawDivider(y0 + 342.0f);
+			drawExplicitTitle(y0 + 382.0f, presentation.sections[1]);
+			if (!presentation.sections[1].rows.empty())
+				drawSubRow(y0 + 424.0f, presentation.sections[1].rows[0]);
+			drawDivider(y0 + 460.0f);
+			drawExplicitTitle(y0 + 500.0f, presentation.sections[2]);
+			if (explicitLayout == SubLayout::AssemblyEditTargetVolume0 &&
+				presentation.sections[2].rows.size() >= 2) {
+				drawSubRow(y0 + 542.0f, presentation.sections[2].rows[0]);
+				drawSubRow(y0 + 584.0f, presentation.sections[2].rows[1]);
+				if (!presentation.sections[2].notes.empty())
+					drawNote(y0 + 678.0f, presentation.sections[2].notes[0]);
+			}
+			else {
+				if (!presentation.sections[2].rows.empty())
+					drawSubRow(y0 + 542.0f, presentation.sections[2].rows[0]);
+				if (!presentation.sections[2].notes.empty())
+					drawNote(y0 + 604.0f, presentation.sections[2].notes[0]);
+				if (presentation.sections[2].notes.size() >= 2)
+					drawNote(y0 + 626.0f, presentation.sections[2].notes[1]);
+			}
+		}
+		else if (explicitLayout == SubLayout::AssemblyOffsetVolume0 &&
+			presentation.sections.size() >= 2) {
+			drawExplicitTitle(y0 + 230.0f, presentation.sections[0]);
+			if (presentation.sections[0].rows.size() >= 2) {
+				drawSubRow(y0 + 272.0f, presentation.sections[0].rows[0]);
+				drawSubRow(y0 + 314.0f, presentation.sections[0].rows[1]);
+			}
+			drawDivider(y0 + 350.0f);
+			drawExplicitTitle(y0 + 390.0f, presentation.sections[1]);
+			if (presentation.sections[1].rows.size() >= 2) {
+				drawSubRow(y0 + 432.0f, presentation.sections[1].rows[0]);
+				drawSubRow(y0 + 480.0f, presentation.sections[1].rows[1]);
+			}
+		}
+		else if ((explicitLayout == SubLayout::AssemblyOffsetTargetVolume0 ||
+			explicitLayout == SubLayout::AssemblyOffsetTargetVolume1) &&
+			presentation.sections.size() >= 3) {
+			drawExplicitTitle(y0 + 230.0f, presentation.sections[0]);
+			if (!presentation.sections[0].rows.empty())
+				drawSubRow(y0 + 272.0f, presentation.sections[0].rows[0]);
+			drawDivider(y0 + 310.0f);
+			drawExplicitTitle(y0 + 350.0f, presentation.sections[1]);
+			if (presentation.sections[1].rows.size() >= 2) {
+				drawSubRow(y0 + 392.0f, presentation.sections[1].rows[0]);
+				drawSubRow(y0 + 434.0f, presentation.sections[1].rows[1]);
+			}
+			drawDivider(y0 + 472.0f);
+			drawExplicitTitle(y0 + 512.0f, presentation.sections[2]);
+			if (!presentation.sections[2].rows.empty())
+				drawSubRow(y0 + 554.0f, presentation.sections[2].rows[0]);
+			if (explicitLayout == SubLayout::AssemblyOffsetTargetVolume0 &&
+				presentation.sections.size() >= 4) {
+				drawDivider(y0 + 592.0f);
+				drawExplicitTitle(y0 + 632.0f, presentation.sections[3]);
+				if (presentation.sections[3].rows.size() >= 2) {
+					drawSubRow(y0 + 674.0f, presentation.sections[3].rows[0]);
+					drawSubRow(y0 + 716.0f, presentation.sections[3].rows[1]);
+				}
+			}
+			else {
+				if (!presentation.sections[2].notes.empty())
+					drawNote(y0 + 620.0f, presentation.sections[2].notes[0]);
+				if (presentation.sections[2].notes.size() >= 2)
+					drawNote(y0 + 642.0f, presentation.sections[2].notes[1]);
+			}
+		}
+		else if (explicitLayout == SubLayout::AssemblyApply &&
+			presentation.sections.size() >= 2) {
+			drawExplicitTitle(y0 + 230.0f, presentation.sections[0]);
+			if (!presentation.sections[0].rows.empty())
+				drawSubRow(y0 + 282.0f, presentation.sections[0].rows[0]);
+			drawDivider(y0 + 326.0f);
+			drawExplicitTitle(y0 + 366.0f, presentation.sections[1]);
+			if (presentation.sections[1].rows.size() >= 2) {
+				drawSubRow(y0 + 408.0f, presentation.sections[1].rows[0]);
+				drawSubRow(y0 + 450.0f, presentation.sections[1].rows[1]);
+			}
+		}
+
+		drawGoldFooter();
+		return;
+	}
 
 	const bool renderingSetupLayout =
 		presentation.sections.size() >= 4 &&
@@ -1018,7 +1232,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		presentation.sections[2].rows.size() >= 2;
 
 	// =========================================================
-	// GOLD SUB-LAYER 1 — RENDERING SETUP
+	// GOLD SUB-LAYER 1 â€” RENDERING SETUP
 	// =========================================================
 	if (renderingSetupLayout) {
 
@@ -1282,7 +1496,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	}
 
 	// =========================================================
-	// GOLD SUB-LAYER 2 — TEMP SAFE RENDER
+	// GOLD SUB-LAYER 2 â€” TEMP SAFE RENDER
 	// =========================================================
 	if (!collisionSetupLayout) {
 
@@ -1354,12 +1568,12 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	}
 
 	// =========================================================
-	// GOLD SUB-LAYER 0 — COLLISION SETUP
+	// GOLD SUB-LAYER 0 â€” COLLISION SETUP
 	// =========================================================
 	drawDivider(y0 + 105.0f);
 
 	// =========================================================
-	// SECTION 0 — Particle Object
+	// SECTION 0 â€” Particle Object
 	// =========================================================
 	glColor4f(0.85f, 0.95f, 1.0f, alpha);
 
@@ -1378,7 +1592,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	drawDivider(y0 + 225.0f);
 
 	// =========================================================
-	// SECTION 1 — Collision Proxy
+	// SECTION 1 â€” Collision Proxy
 	// =========================================================
 	glColor4f(0.85f, 0.95f, 1.0f, alpha);
 
@@ -1423,7 +1637,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	drawDivider(y0 + 385.0f);
 
 	// =========================================================
-	// SECTION 2 — Static Particle Asset
+	// SECTION 2 â€” Static Particle Asset
 	// =========================================================
 	glColor4f(0.85f, 0.95f, 1.0f, alpha);
 
@@ -1447,7 +1661,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	drawDivider(y0 + 544.0f);
 
 	// =========================================================
-	// SECTION 3 — Next Sub-Layer
+	// SECTION 3 â€” Next Sub-Layer
 	// =========================================================
 	glColor4f(0.85f, 0.95f, 1.0f, alpha);
 
@@ -1504,14 +1718,17 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 
 	const bool confirmation =
 		data.mode == ObjExportPanelMode::CONFIRM;
+	const bool nameEntry =
+		data.mode == ObjExportPanelMode::NAME_ENTRY;
+	const bool compactDialog = confirmation || nameEntry;
 
 	const float panelW =
-		confirmation
+		compactDialog
 		? 580.0f
 		: min(1120.0f, screenW - 100.0f);
 
 	const float panelH =
-		confirmation
+		compactDialog
 		? 280.0f
 		: min(660.0f, screenH - 100.0f);
 
@@ -1588,6 +1805,36 @@ void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
 			"W/S: Select    E: Load selected asset    Q: Cancel",
 			GLUT_BITMAP_HELVETICA_12);
 
+		return;
+	}
+
+	if (nameEntry) {
+		glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+		drawText2D(textX, y0 + 52.0f,
+			data.titleText.empty() ? "VITRUGEN STATIC PARTICLE SAVE AS"
+			: data.titleText.c_str(), GLUT_BITMAP_HELVETICA_18);
+
+		glColor4f(0.72f, 0.78f, 0.82f, 1.0f);
+		drawText2D(textX, y0 + 94.0f,
+			data.promptText.empty() ? "STATIC PARTICLE ASSET NAME"
+			: data.promptText.c_str(), GLUT_BITMAP_HELVETICA_18);
+
+		glColor4f(0.45f, 1.0f, 0.65f, 1.0f);
+		const string entry = "> NAME { " + data.inputText + "_ }";
+		drawText2D(textX, y0 + 146.0f, entry.c_str(),
+			GLUT_BITMAP_HELVETICA_18);
+
+		if (!data.statusText.empty()) {
+			glColor4f(0.72f, 0.78f, 0.82f, 1.0f);
+			drawText2D(textX, y0 + 184.0f, data.statusText.c_str(),
+				GLUT_BITMAP_HELVETICA_12);
+		}
+
+		glColor4f(0.62f, 0.68f, 0.72f, 1.0f);
+		drawText2D(textX, y1 - 34.0f,
+			"Type asset name    ENTER: Continue    ESC: Cancel",
+			GLUT_BITMAP_HELVETICA_12);
+		glLineWidth(1.0f);
 		return;
 	}
 

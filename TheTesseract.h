@@ -54,6 +54,8 @@ public:
 	bool restoreSingleParticleVolume(const std::vector<float>& input, const int3& size);
 	const int3& singleParticleVolumeSize() const;
 	MarchingCubes* singleParticleMarchingCubes() const;
+	bool prepareSingleParticleMarchingCubesExport();
+	void activateSingleParticleExportedMeshRender();
 	bool singleParticleHasCommittedGeometry() const;
 	float singleParticleRadius() const;
 	void activateLoadedSingleParticleBase(bool editableVolumeRestored);

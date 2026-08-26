@@ -135,9 +135,12 @@ private:
 	bool makeCurrentStaticParticleAsset(vitru::StaticParticleAsset& output) const;
 
 	bool isObjExportModalActive() const;
+	bool isObjExportWorking() const;
+	bool isAnyHostModalActive() const;
 
 	// --- NAMED STATIC PARTICLE ASSET JOBS ---
 	void openStaticParticleLoadPanel();
+	void openStaticParticleSaveAsPanel();
 	void openStaticParticleSaveConfirm(const std::string& displayName);
 	void beginStaticParticleAssetJob();
 	void advanceStaticParticleAssetJob();
@@ -145,7 +148,13 @@ private:
 	bool handleStaticParticleAssetModalKeyboard(const KeyboardInput::KeyEvent& event);
 	bool isStaticParticleAssetModalActive() const;
 
-	void exportCurrentSingleParticleObj();
+	void exportCurrentMeshOBJ();
+	void beginObjExportJob();
+	void advanceObjExportJob();
+	void appendObjExportLog(const std::string& line);
+	void failObjExportJob(const std::string& reason);
+	void closeObjExportPanel();
+	bool handleObjExportModalKeyboard(const KeyboardInput::KeyEvent& event);
 	void closeHostModal();
 
 	// HOST CONFIGURATION

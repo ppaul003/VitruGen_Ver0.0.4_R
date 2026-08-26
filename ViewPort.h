@@ -21,6 +21,7 @@ public:
 		HIDDEN = 0,
 
 		SELECT,
+		NAME_ENTRY,
 		CONFIRM,
 		WORKING,
 		COMPLETE,
@@ -41,6 +42,8 @@ public:
 		std::vector<std::string> logLines;
 
 		std::string titleText;
+		std::string promptText;
+		std::string inputText;
 		std::string confirmText;
 		std::vector<std::string> selectionLines;
 

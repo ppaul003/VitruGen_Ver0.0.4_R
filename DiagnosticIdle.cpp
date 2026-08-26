@@ -330,12 +330,12 @@ DiagnosticIdle::buildPresentation() const {
 	}
 
 	presentation.workspaceName =
-		"LAYER 0 -> MENU";
+		"LAYER 0 -> GLOBAL SHELL CONFIG";
 
 	WorkspacePanelSection environmentSection;
 
 	WorkspacePanelRow environmentRow;
-	environmentRow.label = "[1]: ENVIRONMENT SELECTION";
+	environmentRow.label = "[1]: DOMAIN SELECTION";
 	environmentRow.value = selectedEnvironmentName();
 
 	environmentRow.selectable = true;

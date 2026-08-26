@@ -76,7 +76,7 @@ public:
 
 	struct NavigationRequest {
 
-		NavigationRequestType type =
+		NavigationRequestType type = 
 			NavigationRequestType::NONE;
 
 		WorkspaceDomain domain =
