@@ -632,6 +632,7 @@ void EuclidEngine::onDisplay() {
 }
 
 void EuclidEngine::onMouse(int button, int state, int x, int y) {
+	if (isStaticParticleAssetModalActive()) return;
 	// ---------------------------------------------------------
 	// Layer 0 / domain transitions are keyboard-driven.
 	//
@@ -681,7 +682,10 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 }
 
 void EuclidEngine::onMotion(int x, int y) {
-	
+
+	if (isStaticParticleAssetModalActive())
+		return;
+
 	const TheArbiter::ArbiterResult result =
 		m_arbiter.routePointerMove(x, y);
 
@@ -702,6 +706,7 @@ void EuclidEngine::onMotion(int x, int y) {
 }
 
 void EuclidEngine::onPassiveMotion(int x, int y) {
+	if (isStaticParticleAssetModalActive()) return;
 	if (m_arbiter.isGlobalShell() || 
 		m_tesseract.domainTransitionActive()) return;
 
@@ -778,10 +783,7 @@ void EuclidEngine::onIdle() {
 	const int currentTimeMs =
 		glutGet(GLUT_ELAPSED_TIME);
 
-	const int elapsedMs =
-		currentTimeMs - 
-		previousTimeMs;
-
+	const int elapsedMs = currentTimeMs - previousTimeMs;
 	previousTimeMs = currentTimeMs;
 
 	float deltaTime =
@@ -791,7 +793,17 @@ void EuclidEngine::onIdle() {
 	// Prevent giant animation jumps after breakpoints,
 	// window stalls, etc.
 	// ---------------------------------------------------------
-	deltaTime = std::min(deltaTime, 0.050f);
+	deltaTime = (std::min)(deltaTime, 0.050f);
+
+	// ---------------------------------------------------------
+	// Advance host-side asynchronous persistence jobs.
+	//
+	// StaticParticleAssetIO performs filesystem / CPU loading
+	// in its worker thread. Completion is consumed here on the
+	// GLUT/main thread so renderer/CUDA resources can safely be
+	// updated.
+	// ---------------------------------------------------------
+	advanceStaticParticleAssetJob();
 
 	const WorkspaceFrameContext frame =
 		buildWorkspaceFrameContext(deltaTime);
@@ -943,6 +955,9 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 
 	const int now = glutGet(GLUT_ELAPSED_TIME);
 
+	// ---------------------------------------------------------
+	// GOLD-style visible progress / spinner.
+	// ---------------------------------------------------------
 	if (now - m_staticAssetLastSpinnerMs >= 100) {
 
 		m_staticAssetPanel.spinnerFrame =
@@ -954,16 +969,22 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 		m_staticAssetLastSpinnerMs = now;
 	}
 
-	if (m_staticAssetFuture.wait_for(std::chrono::milliseconds(0)) !=
-		std::future_status::ready) return;
+	// ---------------------------------------------------------
+	// Filesystem / CPU asset load still running.
+	// ---------------------------------------------------------
+	if (m_staticAssetFuture.wait_for(chrono::milliseconds(0)) !=
+		future_status::ready) return;
 
+	// ---------------------------------------------------------
+	// Worker completed.
+	// ---------------------------------------------------------
 	StaticAssetAsyncResult result = m_staticAssetFuture.get();
-
 	m_staticAssetFutureActive = false;
-	for (const std::string& warning : result.report.warnings)
+
+	for (const string& warning : result.report.warnings)
 		m_staticAssetPanel.logLines.push_back("[WARN] " + warning);
 
-	for (const std::string& error : result.report.errors)
+	for (const string& error : result.report.errors)
 		m_staticAssetPanel.logLines.push_back("[ERROR] " + error);
 
 	if (!result.success) {
@@ -972,23 +993,36 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 		return;
 	}
 
+	// =========================================================
+	// INSTALL CANONICAL ASSET
+	// =========================================================
 	const vitru::AssetId id = m_assetRepository.addStaticParticle(result.asset);
 	m_assetRepository.setActiveStaticParticle(id);
 
 	vitru::StaticParticleAsset* active =
 		m_assetRepository.activeStaticParticle();
 
-	if (!active || !m_renderer ||
-		!m_renderer->loadParticleStaticAsset(*active)) {
+	if (!active) {
+		
+		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+		m_staticAssetPanel.statusText = "Active asset repository commit failed.";
 
-		m_staticAssetPanel.mode =
-			ViewPort::ObjExportPanelMode::FAILED;
+		return;
+	}
+	
+	// =========================================================
+	// GPU MESH / MATERIAL / TEXTURE UPLOAD
+	//
+	// MUST happen on GLUT / GL main thread.
+	// =========================================================
+	if (!m_renderer || !m_renderer->loadParticleStaticAsset(*active)) {
 
-		m_staticAssetPanel.statusText =
-			"GPU asset upload failed.";
+		m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+		m_staticAssetPanel.statusText = "GPU asset upload failed.";
 
 		m_staticAssetPanel.logLines.push_back(
-			"[ERROR] renderer could not upload the loaded asset"
+			"[ERROR] renderer could not "
+			"upload the loaded asset"
 		);
 
 		return;
@@ -1012,13 +1046,45 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 				static_cast<int>(active->volumetricSource.dimensions[2])
 			);
 
+		if (!m_tesseract.restoreSingleParticleVolume(active->volumetricSource.samples, sourceDimensions)) {
+			
+			m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::FAILED;
+			m_staticAssetPanel.statusText = "Native FLOAT32_SDF GPU restore failed.";
+
+			m_staticAssetPanel.logLines.push_back(
+				"[ERROR] native volume "
+				"could not be restored"
+			);
+			
+			return;
+		}
+
 		editableVolumeRestored = true;
 
 		m_staticAssetPanel.logLines.push_back(
-			"[VSPA] native FLOAT32_SDF volume restored"
+			"[VSPA] native FLOAT32_SDF "
+			"volume restored"
 		);
 	}
 
+	// =========================================================
+	// ACTIVATE LOADED SINGLE_PARTICLE
+	//
+	// This is the reconstructed equivalent of GOLD's
+	// applySingleParticleConfigToSystem() path.
+	//
+	// It switches the cartridge to:
+	//
+	//     LoadedStaticMesh
+	//     ParticleRenderMode::Mesh
+	//
+	// without returning workspace semantics to EuclidEngine.
+	// =========================================================
+	m_tesseract.activateLoadedSingleParticleBase(editableVolumeRestored);
+
+	// =========================================================
+	// COMPLETE
+	// =========================================================
 	m_staticAssetPanel.mode = ViewPort::ObjExportPanelMode::COMPLETE;
 	m_staticAssetPanel.progressPercent = 100;
 
@@ -1031,6 +1097,7 @@ void EuclidEngine::advanceStaticParticleAssetJob() {
 	m_staticAssetPanel.logLines.push_back("[EuclidRenderer] textured material ranges uploaded");
 	
 	rebuildMenus();
+	glutPostRedisplay();
 }
 
 void EuclidEngine::closeStaticParticleAssetPanel() {
