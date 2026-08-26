@@ -14,6 +14,9 @@
 #include "particleSystem.h"
 #include "renderer_Euclid.h"
 
+using namespace std;
+using namespace glm;
+
 namespace {
 	template <typename Enum>
 	Enum cycleEnum(Enum current, int count, int direction) {
@@ -174,22 +177,35 @@ void SingleParticleWorkspace::update(
 }
 
 void SingleParticleWorkspace::render(
-	const WorkspaceFrameContext& frame,
+	const WorkspaceFrameContext& frame, 
 	WorkspaceServices& services) {
 
 	if (!services.renderer || !frame.displayEnabled) return;
-	EuclidRenderer& renderer = *services.renderer;
 
-	renderer.setGridMode3D();
-	renderer.setGridStyle(4, false);
-	renderer.setWorkspaceGridVisibility(true, true, false, true);
-	renderer.displayGrid();
+	EuclidRenderer& renderer = *services.renderer;
+	
+	const bool layer1 = services.arbiter &&
+		services.arbiter->isDomainSelection();
 
 	const bool layer2 = services.arbiter &&
 		services.arbiter->isWorkspaceConfiguration();
+
 	const bool referenceOrShape = services.arbiter &&
 		services.arbiter->isActiveWorkspace() &&
 		(m_subLayer == SubLayer::Reference || m_subLayer == SubLayer::ShapeEdit);
+
+	// ---------------------------------------------------------
+	// LAYER 1
+	//
+	// GOLD displays the complete GRID_3D domain before the
+	// SINGLE_PARTICLE anchor workspace becomes active.
+	// ---------------------------------------------------------
+	if (layer1) {
+		configureWorkspaceGrid(services);
+		renderer.displayGrid();
+
+		return;
+	}
 
 	if (services.arbiter && services.arbiter->isActiveWorkspace() &&
 		(m_subLayer == SubLayer::VolumeRender ||
@@ -247,7 +263,7 @@ void SingleParticleWorkspace::render(
 	renderer.displayParticleWorkspace(
 		frame.thetaRad,
 		frame.phiRad,
-		256.0f,
+		frame.particleWorkspaceZs,
 		m_workplaneSlice,
 		showWorkplane,
 		m_selectedParticle,
@@ -667,6 +683,52 @@ void SingleParticleWorkspace::updateCameraIntent(WorkspaceServices& services) co
 	else {
 		services.camera->setBehaviorMode(CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE);
 	}
+}
+
+void SingleParticleWorkspace::configureWorkspaceGrid(WorkspaceServices& services) const {
+	if (!services.renderer) return;
+
+	EuclidRenderer& renderer = *services.renderer;
+
+	// ---------------------------------------------------------
+	// GOLD Ver004 GRID_3D workspace domain.
+	//
+	// GOLD sourced this from the shared 64^3 ParticleSystem:
+	//
+	//     simulation box = 4.0
+	//     grid           = 64 x 64 x 64
+	//     origin         = (-2, -2, -2)
+	//     cell size      = 4 / 64 = 0.0625
+	//
+	// The refactored cartridge declares the same generic
+	// spatial presentation directly to EuclidRenderer.
+	// ---------------------------------------------------------
+	const int gridDim = renderer.getGridDimSize();
+	const float boxSize = static_cast<float>(renderer.getSimBoxSize());
+
+	if (gridDim <= 0 || boxSize <= 0.0f) return;
+
+	const float halfBox = boxSize * 0.5f;
+
+	const float cellSize =
+		boxSize / static_cast<float>(gridDim);
+
+	renderer.setGrid(
+		ivec3(gridDim, gridDim, gridDim),
+		vec3(-halfBox, -halfBox, -halfBox),
+		vec3(cellSize, cellSize, cellSize)
+	);
+
+	renderer.setGridMode3D();
+	renderer.setGridStyle(renderer.getGridMajorEvery(), false);
+
+	renderer.setWorkspaceGridVisibility(
+		true,	// boundary
+		true,	// major grid
+		false,	// minor grid
+		true	// axes
+	);
+
 }
 
 void SingleParticleWorkspace::resetRuntimeTraversal() {

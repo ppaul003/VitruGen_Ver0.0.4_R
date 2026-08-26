@@ -285,7 +285,7 @@ void ViewPort::drawPresentationHeader(const WorkspacePresentation& presentation)
 
 	if (!presentation.layerLabel.empty()) {
 
-		y += 32.0f;
+		y += 35.0f;
 		glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
 
 		drawText2D(
@@ -394,7 +394,7 @@ void ViewPort::drawSectionDivider(float y) {
 // =============================================================================
 void ViewPort::drawPresentationSections(const WorkspacePresentation& presentation) {
 
-	float y = 245.0f;
+	float y = 280.0f;
 	const float headingX = 95.0f;
 	const float rowX = 95.0f;
 	bool contentDrawn = false;
@@ -433,7 +433,7 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 	if (!presentation.statusLine.empty()) {
 
 		if (contentDrawn)
-			y += 31.0f;
+			y += 10.0f;
 
 		switch (presentation.statusTone) {
 		case WorkspaceStatusTone::Ready:

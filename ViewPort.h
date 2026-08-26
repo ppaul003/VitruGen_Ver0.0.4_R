@@ -134,7 +134,7 @@ private:
 	float m_headerHeight = 140.0f;
 
 	float m_sectionSpacing = 42.0f;
-	float m_rowSpacing = 34.0f;
+	float m_rowSpacing = 55.0f;
 
 	// =========================================================
 	// PANEL ANIMATION

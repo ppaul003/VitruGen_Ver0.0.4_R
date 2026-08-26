@@ -277,16 +277,20 @@ public:
 	bool initialize(WorkspaceServices& services) override;
 	void enter(WorkspaceServices& services) override;
 	void exit(WorkspaceServices& services) override;
+
 	void update(const WorkspaceFrameContext& frame, WorkspaceServices& services) override;
 	void render(const WorkspaceFrameContext& frame, WorkspaceServices& services) override;
 	bool handleInput(const WorkspaceInputEvent& input, WorkspaceServices& services) override;
+
 	WorkspacePresentation buildPresentation() const override;
 	WorkspaceMenuPresentation buildMenu() const override;
+
 	bool handleMenuCommand(int command, WorkspaceServices& services) override;
 
 	bool initialized() const { return m_initialized; }
 	bool entered() const { return m_entered; }
 	void shutdown();
+
 	HostRequest takeHostRequest() {
 		const HostRequest request = m_pendingHostRequest;
 		m_pendingHostRequest = HostRequest::None;
@@ -296,11 +300,14 @@ public:
 	// Persistence compatibility surface used by the host bridge.
 	const int3& getVolumeSize() const { return m_volumeSize; }
 	std::size_t getVolumeBytes() const;
+
 	float* getVolume() const { return m_dWorkingVolume; }
 	bool exportWorkingVolumeToHost(std::vector<float>& output) const;
+
 	bool restoreCommittedVolumeFromHost(
 		const std::vector<float>& input,
 		const int3& sourceSize);
+
 	MarchingCubes* marchingCubes() const { return m_marchingCubes.get(); }
 	bool hasCommittedGeometry() const { return m_hasCommittedGeometry; }
 	float particleRadius() const { return m_particleRadius; }
@@ -310,71 +317,79 @@ public:
 	const VolumeObjectState& getVolume0State() const { return m_volume0State; }
 	const VolumeObjectState& getVolume1State() const { return m_volume1State; }
 	const VolumeObjectState& getActiveVolumeState() const;
-	VolumePrimitive getVolumePrimitiveSelection() const {
-		return getActiveVolumeState().primitive;
-	}
+
+	VolumePrimitive getVolumePrimitiveSelection() const { return getActiveVolumeState().primitive; }
 	VolumePrimitive getResolvedVolumePrimitiveSelection() const;
+
 	AssemblyNode getVolumeAssemblyNode() const { return m_assemblyNode; }
 	InjectionMode getVolumeInjectionMode() const { return m_injectionMode; }
+
 	ObjectEditMode getObjectEditMode() const { return m_objectEditMode; }
 	ObjectRotationMode getObjectRotationMode() const { return m_objectRotationMode; }
 	ObjectTransformMode getObjectTransformMode() const { return m_objectTransformMode; }
+
 	OffsetVector getOffsetVectorSelection() const { return m_offsetVector; }
+
 	float getOffsetIncrement() const { return m_offsetIncrement; }
 	float getInjectionRailT() const { return m_injectionRailT; }
+
 	float getOffsetX() const { return getActiveVolumeState().offsetX; }
 	float getOffsetY() const { return getActiveVolumeState().offsetY; }
 	float getOffsetZ() const { return getActiveVolumeState().offsetZ; }
+
 	float getRotationPitchDeg() const { return getActiveVolumeState().pitchDeg; }
 	float getRotationYawDeg() const { return getActiveVolumeState().yawDeg; }
 	float getRotationRollDeg() const { return getActiveVolumeState().rollDeg; }
+
 	float getEffectiveVolumeScaleX() const;
 	float getEffectiveVolumeScaleY() const;
 	float getEffectiveVolumeScaleZ() const;
+
 	const ObjectBasis& getObjectBasis() const { return getActiveVolumeState().basis; }
 	ObjectBasis getEffectiveObjectBasis() const;
-	bool hasEditableVolumePrimitive() const {
-		return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE;
-	}
+
+	bool hasEditableVolumePrimitive() const { return getVolumePrimitiveSelection() != VOLUME_PRIMITIVE_BASE; }
 	bool hasInjectionVoxelSelected() const { return m_injectionVoxel != InjectionVoxel::None; }
 	bool isEditingInjectionVoxel0() const { return m_editTarget == EditTarget::Volume0; }
 	bool isEditingInjectionVoxel1() const { return m_editTarget == EditTarget::Volume1; }
 	bool isInjectionBrushBaseSelected() const;
-	bool isSPMirrorEnabled() const {
-		return hasInjectionVoxelSelected() && m_mirrorMode == MirrorMode::On;
-	}
+
+	bool isSPMirrorEnabled() const { return hasInjectionVoxelSelected() && m_mirrorMode == MirrorMode::On; }
 	bool isSubLayerPanelOpen() const { return m_subLayerPanelOpen; }
 	bool isVolumeRenderSubLayer() const { return m_subLayer == SubLayer::VolumeRender; }
 	int getActiveSubLayerPanelItem() const { return m_activePanelItem; }
+
 	int getInjectionVoxelDX() const;
 	int getInjectionVoxelDY() const;
 	int getInjectionVoxelDZ() const;
+
 	void getMirroredInjectionDirection(int& dx, int& dy, int& dz) const;
+
 	BasisVector rotateLocalVectorXYZ(
 		const BasisVector& vector,
 		float pitchDeg,
 		float yawDeg,
 		float rollDeg) const;
+
 	BasisVector transformByBasis(
 		const ObjectBasis& basis,
 		const BasisVector& localVector) const;
+
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
 
 private:
-	static constexpr float kParticleWorldBoundary = 1.0f;
-	static constexpr float kParticleGridDim = 64.0f;
-	static constexpr float kParticleCellSize =
-		(2.0f * kParticleWorldBoundary) / kParticleGridDim;
-	static constexpr float kParticleRadiusMax = 0.5f * kParticleCellSize;
-	static constexpr float kParticleRadiusMin = 0.25f * kParticleRadiusMax;
-	static constexpr float kParticleRadiusDefault =
-		0.5f * (kParticleRadiusMin + kParticleRadiusMax);
-	static constexpr float kParticleRadiusStep =
-		(kParticleRadiusMax - kParticleRadiusMin) / 16.0f;
-
 	bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer3Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
+
+	const char* workspaceName() const;
+	const char* objectTypeName() const;
+	const char* particleColorName() const;
+	const char* particleRenderModeName() const;
+	const char* subLayerName() const;
+	const char* collisionShapeName() const;
+	const char* volumePrimitiveName() const;
+	const char* injectionVoxelName() const;
 
 	void moveLayer1Cursor(int direction);
 	void adjustLayer1Value(int direction);
@@ -387,6 +402,8 @@ private:
 	void placeAnchor();
 	void syncParticleRendering(WorkspaceServices& services);
 	void updateCameraIntent(WorkspaceServices& services) const;
+	void configureWorkspaceGrid(WorkspaceServices& services) const;
+
 	void resetRuntimeTraversal();
 	void handleReferencePrimaryAction();
 	void toggleSubLayerPanel();
@@ -401,18 +418,10 @@ private:
 	WorkspacePresentation buildLayer1Presentation() const;
 	WorkspacePresentation buildLayer2Presentation() const;
 	WorkspacePresentation buildLayer3Presentation() const;
+
 	void appendReferencePanel(WorkspacePresentation& presentation) const;
 	void appendShapePanel(WorkspacePresentation& presentation) const;
 	void appendVolumePanel(WorkspacePresentation& presentation) const;
-
-	const char* workspaceName() const;
-	const char* objectTypeName() const;
-	const char* particleColorName() const;
-	const char* particleRenderModeName() const;
-	const char* subLayerName() const;
-	const char* collisionShapeName() const;
-	const char* volumePrimitiveName() const;
-	const char* injectionVoxelName() const;
 
 	bool initializeCadResources();
 	void releaseCadResources();
@@ -429,6 +438,7 @@ private:
 	void updateSPVolumePreview(const SingleParticleWorkspace& workspace);
 	void copyCommittedVolumeToPreview();
 	void clearSPCommittedVolume();
+
 	bool renderSPVolumeToPBO(
 		const SingleParticleWorkspace& workspace,
 		int renderMethod,
@@ -447,35 +457,43 @@ private:
 	};
 
 	SPVolumeBasis buildSPVolumeBasis(const SingleParticleWorkspace& workspace) const;
+
 	SPVolumeBasis buildSPVolumeBasisFromState(
 		const SingleParticleWorkspace& workspace,
 		const VolumeObjectState& state) const;
+
 	void renderSPVolumeOrientationAxes(
 		const SingleParticleWorkspace& workspace,
 		float thetaRad,
 		float phiRad);
+
 	void renderSPVolumeInjectionVoxelPreview(
 		const SingleParticleWorkspace& workspace,
 		float thetaRad,
 		float phiRad,
 		float zs);
+
 	void renderSPVolumeInjectionEditTargetPreview(
 		const SingleParticleWorkspace& workspace,
 		float thetaRad,
 		float phiRad,
 		float zs);
+
 	void renderSPVolumeOffsetGrid(
 		const SingleParticleWorkspace& workspace,
 		float thetaRad,
 		float phiRad,
 		float zs);
+
 	void renderSPVolumeTexture();
 	bool initializeSPVolumeBoundarySensor();
 	bool updateSPVolumeBoundarySensor(float isoValue = 0.0f, float safetyBand = 0.0f);
+
 	bool classifySPVolumeBoundaryForSource(
 		const float* source,
 		float isoValue,
 		float safetyBand);
+
 	bool classifySPVolumeBoundaryForSource(
 		const float* source,
 		float isoValue,
@@ -484,13 +502,16 @@ private:
 		unsigned int& unsafeCount,
 		unsigned int* insideSampleCount,
 		std::vector<unsigned char>* boundaryMaskCPU);
+
 	void updateSPOverlapPreviewStatus(const SingleParticleWorkspace& workspace);
 	void clearSPOverlapPreviewStatus();
 	void releaseSPVolumeBoundarySensor();
 	void markSPVolumeBoundarySafe();
+
 	bool isSPVolumeBoundarySafe() const {
 		return m_volumeBoundarySensorReady && m_volumeBoundaryUnsafeCount == 0;
 	}
+
 	bool isSPOverlapPreviewActive() const {
 		return m_spOverlapPreviewSensorReady &&
 			m_spOverlapPreviewUnsafeCount == 0 &&
@@ -500,8 +521,10 @@ private:
 				m_spMirrorOverlapPreviewUnsafeCount == 0 &&
 				m_spMirrorOverlapPreviewInsideSampleCount > 0));
 	}
+
 	int getSPVolumePrimitiveId(const SingleParticleWorkspace& workspace) const;
 	int getSPVolumePrimitiveIdFromState(const VolumeObjectState& state) const;
+
 	float3 buildSPVolumeOffset(const SingleParticleWorkspace& workspace) const;
 	float3 buildSPVolumeOffsetFromState(const VolumeObjectState& state) const;
 	float3 buildSPVolumeRailBrushOffset(const SingleParticleWorkspace& workspace) const;
@@ -510,6 +533,7 @@ private:
 
 	VolumeObjectState& activeVolumeState();
 	const VolumeObjectState& activeVolumeState() const;
+
 	void resetVolumeState(VolumeObjectState& state, VolumePrimitive primitive = VolumePrimitive::Sphere);
 	void cycleVolumePrimitiveSelection(int direction);
 	void cycleInjectionVoxelSelection(int direction);
@@ -529,6 +553,18 @@ private:
 	void commitObjectRotationToBasis();
 	void commitBrushBase();
 	bool canApplyVolumeToBase() const;
+
+private:
+	static constexpr float kParticleWorldBoundary = 1.0f;
+	static constexpr float kParticleGridDim = 64.0f;
+	static constexpr float kParticleCellSize =
+		(2.0f * kParticleWorldBoundary) / kParticleGridDim;
+	static constexpr float kParticleRadiusMax = 0.5f * kParticleCellSize;
+	static constexpr float kParticleRadiusMin = 0.25f * kParticleRadiusMax;
+	static constexpr float kParticleRadiusDefault =
+		0.5f * (kParticleRadiusMin + kParticleRadiusMax);
+	static constexpr float kParticleRadiusStep =
+		(kParticleRadiusMax - kParticleRadiusMin) / 16.0f;
 
 	bool m_initialized = false;
 	bool m_entered = false;
