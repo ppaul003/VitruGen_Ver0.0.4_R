@@ -1425,11 +1425,11 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer1Presentation() const {
 	p.workspaceName = "LAYER 1 -> GRID_3D WORKSPACE CONFIGURATION";
 	p.layerLabel = std::string("MODE: ") + workspaceName();
 	WorkspacePanelSection section;
-	section.rows.push_back(makeRow("[1] GRID_3D SELECTION", workspaceName(),
+	section.rows.push_back(makeRow("[1]: GRID_3D SELECTION", workspaceName(),
 		m_layer1Item == Layer1Item::Workspace));
-	section.rows.push_back(makeRow("[2] PARTICLE TYPE", objectTypeName(),
+	section.rows.push_back(makeRow("[2]: PARTICLE TYPE", objectTypeName(),
 		m_layer1Item == Layer1Item::ParticleType));
-	section.rows.push_back(makeRow("[3] PRESS E TO CONFIGURE SIM", "",
+	section.rows.push_back(makeRow("[3]: PRESS E TO CONFIGURE SIM", "",
 		m_layer1Item == Layer1Item::Configure));
 	p.sections.push_back(section);
 
@@ -1527,6 +1527,10 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 		p.footerLine2 = "E: Advance    Q: Back    RMB: Menu";
 	}
 	return p;
+}
+
+WorkspacePresentation SingleParticleWorkspace::buildLayer1TransitionPresentation() const {
+	return buildLayer1Presentation();
 }
 
 void SingleParticleWorkspace::appendReferencePanel(WorkspacePresentation& p) const {

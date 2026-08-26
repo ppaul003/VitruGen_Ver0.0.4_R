@@ -8,7 +8,9 @@ enum class WorkspaceStatusTone {
 
 	Neutral = 0,
 	Ready,
-	Warning
+	Warning,
+
+	Transition
 };
 
 struct WorkspacePanelRow {
@@ -38,8 +40,11 @@ struct WorkspacePresentation {
 	std::string subLayerLabel;
 
 	std::string statusLine;
+
 	WorkspaceStatusTone statusTone =
 		WorkspaceStatusTone::Neutral;
+
+	bool statusBlink = false;
 
 	std::vector<WorkspacePanelSection> sections;
 

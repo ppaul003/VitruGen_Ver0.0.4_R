@@ -27,6 +27,7 @@ public:
 		NONE = 0,
 
 		ENTER_DOMAIN_VISUAL,
+		ENTER_DOMAIN_READY,
 		ENTER_CAMERA,
 
 		EXIT_CAMERA,
@@ -67,7 +68,8 @@ private:
 
 private:
 	static constexpr float kGrid3DCamTransDuration = 1.0f;
-
+	static constexpr float kGrid3DReadyHoldDuration = 0.35f;
+	
 	WorkspaceServices m_services;
 	DiagnosticIdle m_diagnosticIdle;
 
@@ -79,6 +81,8 @@ private:
 
 	ParticleSimWorkspace m_particleSimWorkspace;
 	SingleParticleWorkspace m_singleParticleWorkspace;
+
+	float m_transitionPhaseElapsed = 0.0f;
 
 	IWorkspace* m_activeWorkspace = nullptr;
 };

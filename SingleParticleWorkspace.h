@@ -376,6 +376,7 @@ public:
 		const BasisVector& localVector) const;
 
 	ObjectBasis orthonormalizeBasis(const ObjectBasis& basis) const;
+	WorkspacePresentation buildLayer1TransitionPresentation() const;
 
 private:
 	bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);

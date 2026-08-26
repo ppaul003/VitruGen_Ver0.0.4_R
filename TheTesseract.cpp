@@ -80,6 +80,7 @@ void Tesseract::shutdown() {
 	
 	m_singleParticleWorkspace.shutdown();
 }
+
 void Tesseract::update(const WorkspaceFrameContext& frame) {
 	processNavigationRequest();
 
@@ -112,7 +113,6 @@ void Tesseract::render(const WorkspaceFrameContext& frame) {
 		switch (m_domainTransitionPhase) {
 
 		case DomainTransitionPhase::ENTER_DOMAIN_VISUAL:
-
 		case DomainTransitionPhase::ENTER_CAMERA:
 			m_diagnosticIdle.render(frame, m_services);
 			return;
@@ -178,13 +178,66 @@ Tesseract::presentation() const {
 	if (!m_activeWorkspace) {
 
 		WorkspacePresentation presentation;
-		presentation.panelVisible = true;
 
+		presentation.panelVisible = true;
 		presentation.workspaceName = "VITRUGEN HOST";
 		presentation.layerLabel = "NO ACTIVE WORKSPACE";
 		presentation.statusLine = "WORKSPACE SOCKET OFFLINE";
 
 		return presentation;
+	}
+
+	// =========================================================
+	// GRID_3D FORWARD TRANSITION PRESENTATION
+	// =========================================================
+	if (m_transitionDomain == TheArbiter::WorkspaceDomain::GRID_3D) {
+
+		switch (m_domainTransitionPhase) {
+
+			// -----------------------------------------------------
+			// Tesseract is still moving.
+			// Keep Layer-0 panel, replace only its status.
+			// -----------------------------------------------------
+		case DomainTransitionPhase::ENTER_DOMAIN_VISUAL: {
+
+			WorkspacePresentation presentation =
+				m_diagnosticIdle.buildPresentation();
+
+			presentation.statusLine =
+				"AUTO: Transitioning To GRID_3D...";
+
+			presentation.statusTone =
+				WorkspaceStatusTone::Transition;
+
+			presentation.statusBlink = true;
+			return presentation;
+		}
+
+		// -----------------------------------------------------
+		// Tesseract is captured and ready.
+		// Briefly acknowledge completion.
+		// -----------------------------------------------------
+		case DomainTransitionPhase::ENTER_DOMAIN_READY: {
+
+			WorkspacePresentation presentation =
+				m_diagnosticIdle.buildPresentation();
+
+			presentation.statusLine =
+				"READY: GRID_3D Setup Complete.";
+
+			presentation.statusTone =
+				WorkspaceStatusTone::Ready;
+
+			presentation.statusBlink = false;
+			return presentation;
+		}
+
+		case DomainTransitionPhase::ENTER_CAMERA:
+			return m_singleParticleWorkspace.buildLayer1TransitionPresentation();
+
+		default:
+			break;
+		}
 	}
 
 	// ---------------------------------------------------------
@@ -382,19 +435,56 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		// Freeze that visual while the camera moves.
 		// -----------------------------------------------------
 		m_domainTransitionPhase =
-			DomainTransitionPhase::ENTER_CAMERA;
+			DomainTransitionPhase::ENTER_DOMAIN_READY;
 
-		if (m_services.camera) 
-			m_services.camera->beginTransitionToStandard3D(kGrid3DCamTransDuration);
+		m_transitionPhaseElapsed = 0.0f;
 		
 		return;
 
-		// =========================================================
-		// ENTER GRID_3D — PHASE 2
-		//
-		// Camera moves toward centered GRID_3D view.
-		// Cube remains frozen front-facing.
-		// =========================================================
+	// =========================================================
+	// ENTER GRID_3D — READY HOLD
+	//
+	// Tesseract:
+	//     front facing
+	//     XY slice captured at Z = 0
+	//
+	// Presentation:
+	//     READY: GRID_3D Setup Complete.
+	//
+	// Camera:
+	//     still at Layer-0 viewing pose
+	// =========================================================
+	case DomainTransitionPhase::ENTER_DOMAIN_READY:
+
+		// DiagnosticIdle is in Grid3D_HoldCenter,
+		// so this preserves the captured visual.
+		m_diagnosticIdle.update(frame, m_services);
+		m_transitionPhaseElapsed += frame.deltaTime;
+
+		if (m_transitionPhaseElapsed < kGrid3DReadyHoldDuration)
+			return;
+
+		// -----------------------------------------------------
+		// READY acknowledgement complete.
+		// Begin camera movement into Layer 1.
+		// -----------------------------------------------------
+		m_domainTransitionPhase =
+			DomainTransitionPhase::ENTER_CAMERA;
+
+		m_transitionPhaseElapsed = 0.0f;
+		
+		if (m_services.camera)
+			m_services.camera->beginTransitionToStandard3D(kGrid3DCamTransDuration);
+		
+
+		return;
+
+	// =========================================================
+	// ENTER GRID_3D — PHASE 2
+	//
+	// Camera moves toward centered GRID_3D view.
+	// Cube remains frozen front-facing.
+	// =========================================================
 	case DomainTransitionPhase::ENTER_CAMERA:
 
 		// DiagnosticIdle should now be in its hold-center

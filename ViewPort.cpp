@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <string>
 #include <cstdio>
+#include <chrono>
+#include <cmath>
 
 using namespace std;
 
@@ -432,8 +434,30 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 
 	if (!presentation.statusLine.empty()) {
 
-		if (contentDrawn)
-			y += 10.0f;
+		if (contentDrawn) y += 10.0f;
+		float statusAlpha = m_panelSlide;
+
+		// ---------------------------------------------------------
+		// Optional status-line blink.
+		//
+		// 0.50 second cycle:
+		//     0.25 bright
+		//     0.25 dim
+		// ---------------------------------------------------------
+		if (presentation.statusBlink) {
+
+			using Clock =
+				chrono::steady_clock;
+
+			const float seconds =
+				chrono::duration<float>(Clock::now().time_since_epoch()).count();
+
+			const bool bright = fmod(seconds, 0.50f) < 0.25f;
+
+			statusAlpha *= bright
+				? 1.0f
+				: 0.20f;
+		}
 
 		switch (presentation.statusTone) {
 		case WorkspaceStatusTone::Ready:
@@ -442,6 +466,10 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 
 		case WorkspaceStatusTone::Warning:
 			glColor4f(1.0f, 0.45f, 0.45f, m_panelSlide);
+			break;
+
+		case WorkspaceStatusTone::Transition:
+			glColor4f(1.0f, 0.65f, 0.15f, statusAlpha);
 			break;
 
 		case WorkspaceStatusTone::Neutral:
