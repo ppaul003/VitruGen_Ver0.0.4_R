@@ -788,7 +788,9 @@ void ViewPort::updateSubLayerPanelAnimation(bool visible) {
 }
 
 void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentation) {
-
+	// =========================================================
+	// PRESENTATION SHAPE VALIDATION
+	// =========================================================
 	const float alpha = m_subLayerPanelSlide;
 
 	// ---------------------------------------------------------
@@ -919,6 +921,201 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		);
 	};
 
+	const bool renderingSetupLayout =
+		presentation.sections.size() >= 4 &&
+		presentation.sections[0].rows.size() >= 1 &&
+		presentation.sections[1].rows.size() >= 1 &&
+		presentation.sections[2].rows.size() >= 2 &&
+		presentation.sections[3].rows.size() >= 2;
+
+	const bool collisionSetupLayout =
+		presentation.sections.size() >= 4 &&
+		presentation.sections[0].rows.size() >= 1 &&
+		presentation.sections[1].rows.size() >= 1 &&
+		presentation.sections[2].rows.size() >= 2 &&
+		presentation.sections[3].rows.size() >= 1;
+
+	// =========================================================
+	// GOLD SUB-LAYER 1 — RENDERING SETUP
+	// =========================================================
+	if (renderingSetupLayout) {
+
+		auto drawSectionTitle =
+			[&](float y, const WorkspacePanelSection& section) {
+
+			glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+			drawText2D(
+				sectionX,
+				y,
+				section.heading.c_str(),
+				GLUT_BITMAP_HELVETICA_18
+			);
+		};
+
+		drawDivider(y0 + 105.0f);
+
+		// =====================================================
+		// Render Source
+		// =====================================================
+		drawSectionTitle(
+			y0 + 145.0f,
+			presentation.sections[0]
+		);
+
+		drawSubRow(
+			y0 + 185.0f,
+			presentation.sections[0].rows[0]
+		);
+
+		drawDivider(y0 + 220.0f);
+
+		// =====================================================
+		// Mesh Scale Bound
+		// =====================================================
+		drawSectionTitle(
+			y0 + 260.0f,
+			presentation.sections[1]
+		);
+
+		drawSubRow(
+			y0 + 300.0f,
+			presentation.sections[1].rows[0]
+		);
+
+		drawDivider(y0 + 335.0f);
+
+		// =====================================================
+		// Debug Presentation
+		// =====================================================
+		drawSectionTitle(
+			y0 + 375.0f,
+			presentation.sections[2]
+		);
+
+		drawSubRow(
+			y0 + 415.0f,
+			presentation.sections[2].rows[0]
+		);
+
+		drawSubRow(
+			y0 + 457.0f,
+			presentation.sections[2].rows[1]
+		);
+
+		drawDivider(y0 + 492.0f);
+
+		// =====================================================
+		// Next / Previous Sub-Layer
+		// =====================================================
+		drawSectionTitle(
+			y0 + 532.0f,
+			presentation.sections[3]
+		);
+
+		drawSubRow(
+			y0 + 574.0f,
+			presentation.sections[3].rows[0]
+		);
+
+		drawSubRow(
+			y0 + 616.0f,
+			presentation.sections[3].rows[1]
+		);
+
+		// =====================================================
+		// Footer
+		// =====================================================
+		drawDivider(y1 - 92.0f);
+		glColor4f(0.75f, 0.75f, 0.75f, alpha);
+
+		drawText2D(
+			sectionX,
+			y1 - 58.0f,
+			"W/S: Select    A/D: Change value    "
+			"E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+		return;
+	}
+
+	// =========================================================
+	// GOLD SUB-LAYER 2 — TEMP SAFE RENDER
+	// =========================================================
+	if (!collisionSetupLayout) {
+
+		float y = y0 + 145.0f;
+
+		drawDivider(y0 + 105.0f);
+
+		for (const WorkspacePanelSection& section :
+			presentation.sections) {
+
+			if (y >= y1 - 145.0f) {
+
+				break;
+			}
+
+			// -------------------------------------------------
+			// Section title
+			// -------------------------------------------------
+			glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+			drawText2D(
+				sectionX,
+				y,
+				section.heading.c_str(),
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			y += 42.0f;
+
+			// -------------------------------------------------
+			// Rows
+			// -------------------------------------------------
+			for (const WorkspacePanelRow& row :
+				section.rows) {
+
+				if (y >= y1 - 145.0f) {
+
+					break;
+				}
+
+				drawSubRow(y, row);
+
+				y += 42.0f;
+			}
+
+			drawDivider(y + 4.0f);
+
+			y += 40.0f;
+		}
+
+
+		// -----------------------------------------------------
+		// Footer
+		// -----------------------------------------------------
+		drawDivider(y1 - 92.0f);
+
+		glColor4f(0.75f, 0.75f, 0.75f, alpha);
+
+		drawText2D(
+			sectionX,
+			y1 - 58.0f,
+			"W/S: Select    A/D: Change value    "
+			"E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+		return;
+	}
+
+	// =========================================================
+	// GOLD SUB-LAYER 0 — COLLISION SETUP
+	// =========================================================
 	drawDivider(y0 + 105.0f);
 
 	// =========================================================
@@ -939,7 +1136,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	);
 
 	drawDivider(y0 + 225.0f);
-	
+
 	// =========================================================
 	// SECTION 1 — Collision Proxy
 	// =========================================================

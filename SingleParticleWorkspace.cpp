@@ -608,9 +608,9 @@ void SingleParticleWorkspace::backOneLayer(WorkspaceServices& services) {
 	}
 
 	if (services.arbiter->isWorkspaceConfiguration()) {
-		services.arbiter->setApplicationLayer(
-			TheArbiter::ApplicationLayer::DOMAIN_SELECTION);
+		services.arbiter->setApplicationLayer(TheArbiter::ApplicationLayer::DOMAIN_SELECTION);
 		m_anchorPlaced = false;
+
 		if (services.renderer) services.renderer->setParticleHighlighted(false);
 		updateCameraIntent(services);
 		return;
@@ -618,27 +618,99 @@ void SingleParticleWorkspace::backOneLayer(WorkspaceServices& services) {
 
 	if (!services.arbiter->isActiveWorkspace()) return;
 
+	// =========================================================
+	// SUB-LAYER 1 -> SUB-LAYER 0
+	//
+	// Q means structural sub-layer traversal.
+	//
+	// Keep:
+	//     particle selected
+	//     panel visible
+	//
+	// Only the panel CONTENT changes.
+	// =========================================================
+
+	// =========================================================
+	// SUB-LAYER 0
+	// =========================================================
+	if (m_subLayer == SubLayer::Reference) {
+
+		// -----------------------------------------------------
+		// Panel currently open:
+		//
+		// Q only closes the panel.
+		//
+		// Particle remains selected/highlighted.
+		// -----------------------------------------------------
+		if (m_subLayerPanelOpen) {
+
+			m_subLayerPanelOpen = false;
+			m_activePanelItem = 0;
+
+			updateCameraIntent(services);
+
+			return;
+		}
+
+		// -----------------------------------------------------
+		// Particle still selected/highlighted:
+		//
+		// Q is intentionally a no-op.
+		// E owns deselection.
+		// -----------------------------------------------------
+		if (m_selectedParticle) return;
+		
+		// -----------------------------------------------------
+		// XY workplane still armed:
+		//
+		// Q is intentionally a no-op.
+		//
+		// E owns workplane disengagement.
+		// -----------------------------------------------------
+		if (m_selectionArmed) return;
+
+		// -----------------------------------------------------
+		// TRUE Layer-3 runtime state:
+		//
+		//     no panel
+		//     no selected particle
+		//     no armed XY workplane
+		//
+		// NOW Q may structurally return to Layer 2.
+		// -----------------------------------------------------
+		services.arbiter->setApplicationLayer(TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION);
+
+		m_activePanelItem = 0;
+		m_hoverValid = false;
+		m_workplaneSlice = 0;
+
+		updateCameraIntent(services);
+
+		return;
+	}
+
 	if (m_subLayer == SubLayer::MarchingCubes) {
 		m_subLayer = SubLayer::VolumeRender;
 		m_assemblyNode = AssemblyNode::Preview;
 		m_subLayerPanelOpen = true;
 		m_activePanelItem = 0;
 	}
-	else if (m_subLayer == SubLayer::VolumeRender &&
-		m_assemblyNode != AssemblyNode::Preview) {
-		m_assemblyNode = static_cast<AssemblyNode>(
-			static_cast<int>(m_assemblyNode) - 1);
+	else if (m_subLayer == SubLayer::VolumeRender && m_assemblyNode != AssemblyNode::Preview) {
+		m_assemblyNode = 
+			static_cast<AssemblyNode>(static_cast<int>(m_assemblyNode) - 1);
+
 		m_activePanelItem = 0;
 	}
 	else if (m_subLayer == SubLayer::VolumeRender) {
 		m_subLayer = SubLayer::ShapeEdit;
-		m_subLayerPanelOpen = false;
+		m_subLayerPanelOpen = true;
 		m_activePanelItem = 0;
 	}
 	else if (m_subLayer == SubLayer::ShapeEdit) {
 		m_subLayer = SubLayer::Reference;
-		m_subLayerPanelOpen = false;
+		m_subLayerPanelOpen = true;
 		m_activePanelItem = 0;
+		updateCameraIntent(services);
 	}
 	else {
 		services.arbiter->setApplicationLayer(
@@ -1540,7 +1612,7 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 		p.footerLine2 = "Q: Back";
 	}
 	else if (m_subLayer == SubLayer::ShapeEdit) {
-		if (m_subLayerPanelOpen) appendShapePanel(p);
+		appendShapePanel(p);
 		p.statusLine = m_selectedParticle
 			? "PARTICLE SELECTED - RENDERING SETUP ACTIVE"
 			: "SELECT A PARTICLE IN SUB-LAYER_0";
@@ -1696,9 +1768,9 @@ void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 
 	WorkspacePanelSection traversal;
 	traversal.heading = "Next / Previous Sub-Layer:";
-	traversal.rows.push_back(makeRow("[5] MESH / VOLUME PREVIEW AND EDIT", "",
+	traversal.rows.push_back(makeRow("[5]: MESH / VOLUME PREVIEW AND EDIT", "",
 		m_activePanelItem == 4));
-	traversal.rows.push_back(makeRow("[6] RETURN TO COLLISION SETUP", "",
+	traversal.rows.push_back(makeRow("[6]: RETURN TO COLLISION SETUP", "",
 		m_activePanelItem == 5));
 	p.sections.push_back(traversal);
 }
