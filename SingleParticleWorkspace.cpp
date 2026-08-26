@@ -1518,12 +1518,20 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 	p.subLayerLabel = subLayerName();
 
 	if (m_subLayer == SubLayer::Reference) {
-		if (m_subLayerPanelOpen) appendReferencePanel(p);
-		
-		if (m_selectionArmed)
+		// ---------------------------------------------------------
+		// Always construct the semantic Sub-Layer-0 presentation.
+		//
+		// panelVisible controls whether ViewPort is opening or
+		// closing the panel.  The presentation data must survive
+		// during the slide-out animation.
+		// ---------------------------------------------------------
+		appendReferencePanel(p);
+
+		if (m_selectionArmed) 
 			p.statusLine = "PARTICLE SELECTION ARMED";
 		else
 			p.statusLine = "E: Arm particle selection";
+
 		p.footerLine1 = m_subLayerPanelOpen
 			? "W/S: Select    A/D: Change value    E: Activate    TAB: Hide"
 			: m_selectedParticle

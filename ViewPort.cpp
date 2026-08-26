@@ -939,10 +939,12 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	);
 
 	drawDivider(y0 + 225.0f);
-
+	
 	// =========================================================
 	// SECTION 1 — Collision Proxy
 	// =========================================================
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
 	drawText2D(
 		sectionX,
 		y0 + 265.0f,
@@ -991,8 +993,7 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	drawText2D(
 		sectionX,
 		y0 + 425.0f,
-		presentation.sections[2]
-		.heading.c_str(),
+		presentation.sections[2].heading.c_str(),
 		GLUT_BITMAP_HELVETICA_18
 	);
 
@@ -1011,11 +1012,12 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 	// =========================================================
 	// SECTION 3 — Next Sub-Layer
 	// =========================================================
+	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
 	drawText2D(
 		sectionX,
 		y0 + 584.0f,
-		presentation.sections[3]
-		.heading.c_str(),
+		presentation.sections[3].heading.c_str(),
 		GLUT_BITMAP_HELVETICA_18
 	);
 

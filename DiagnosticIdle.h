@@ -59,6 +59,15 @@ private:
 	static constexpr float kPreviewRotationSpeed = 25.0f;
 	static constexpr float kSliceCycleSpeed = 0.35f;
 
+	// ---------------------------------------------------------
+	// DOMAIN TRANSITION SPEEDS
+	//
+	// Faster than normal Layer-0 idle motion so AUTO:
+	// transition visually reads as deliberate system control.
+	// ---------------------------------------------------------
+	static constexpr float kTransitionRotationSpeed = 120.0f;
+	static constexpr float kTransitionSliceSpeed = 1.40f;
+
 	TheArbiter* m_arbiter = nullptr;
 
 	VisualTransitionState m_visualTransition =

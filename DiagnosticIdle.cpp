@@ -51,11 +51,12 @@ void DiagnosticIdle::update(
 	case VisualTransitionState::Grid3D_OrientToFront:
 
 		m_previewRotationDegrees +=
-			kPreviewRotationSpeed * dt;
+			kTransitionRotationSpeed * dt;
 
 		// Slice animation continues normally while
 		// orientation waits for its next pass.
-		m_sliceTravel += kSliceCycleSpeed * dt;
+		m_sliceTravel += kTransitionSliceSpeed * dt;
+
 		if (m_previewRotationDegrees >= m_targetRotationDegrees) {
 
 			m_previewRotationDegrees = m_targetRotationDegrees;
@@ -87,7 +88,8 @@ void DiagnosticIdle::update(
 	// -----------------------------------------------------
 	case VisualTransitionState::Grid3D_CaptureSlice:
 
-		m_sliceTravel += kSliceCycleSpeed * dt;
+		m_sliceTravel += kTransitionSliceSpeed * dt;
+
 		if (m_sliceTravel >= m_targetSliceTravel) {
 
 			m_sliceTravel = m_targetSliceTravel;
