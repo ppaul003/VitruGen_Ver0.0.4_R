@@ -5720,6 +5720,18 @@ void EuclidRenderer::drawMarchingCubesVoxelGridWire(
 void EuclidRenderer::displayVolumeTexture() {
     if (!m_tex) return;
 
+    // ---------------------------------------------------------
+    // Volume PBO already contains the final framebuffer color.
+    //
+    // Empty-space pixels intentionally carry alpha = 0 while
+    // retaining the GOLD volumetric background RGB.
+    //
+    // Therefore this pass must overwrite the framebuffer,
+    // not alpha-blend against the host clear color.
+    // ---------------------------------------------------------
+    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    glDisable(GL_BLEND);
+
     glViewport(0, 0, m_window_w, m_window_h);
 
     glMatrixMode(GL_PROJECTION);
@@ -5785,6 +5797,9 @@ void EuclidRenderer::displayVolumeTexture() {
     glMatrixMode(GL_MODELVIEW);
 
     glEnable(GL_DEPTH_TEST);
+
+    if (blendWasEnabled) glEnable(GL_BLEND);
+    else glDisable(GL_BLEND);
 }
 
 bool EuclidRenderer::loadParticleMeshOBJ(const char* filename) {

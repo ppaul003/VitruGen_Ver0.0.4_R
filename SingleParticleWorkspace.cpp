@@ -874,7 +874,7 @@ int SingleParticleWorkspace::activePanelItemCount() const {
 	if (m_subLayer == SubLayer::Reference) return 4;
 	if (m_subLayer == SubLayer::ShapeEdit) return 6;
 	if (m_subLayer == SubLayer::MarchingCubes) return 5;
-	if (m_assemblyNode == AssemblyNode::Preview) return 3;
+	if (m_assemblyNode == AssemblyNode::Preview) return 4;
 	if (m_assemblyNode == AssemblyNode::ApplyToBase) return 3;
 	if (m_assemblyNode == AssemblyNode::EditObject) {
 		if (!hasInjectionVoxelSelected()) return 4;
@@ -1632,16 +1632,51 @@ WorkspacePresentation SingleParticleWorkspace::buildLayer3Presentation() const {
 		p.footerLine2 = "Q: Back";
 	}
 	else {
-		if (m_subLayerPanelOpen) appendVolumePanel(p);
+		p.nodeTrack.visible = true;
+		p.nodeTrack.activeNode =
+			static_cast<int>(m_assemblyNode);
+		p.nodeTrack.nodeCount = 4;
+		
 		static const char* nodeNames[] = {
-			"Node_0 -> Preview Object", "Node_1 -> Edit Object",
-			"Node_2 -> Offset Object", "Node_3 -> Apply To Base"
+			"Node_0: Preview Object",
+			"Node_1: Edit Object",
+			"Node_2: Offset Object",
+			"Node_3: Apply To Base"
 		};
-		p.statusLine = nodeNames[static_cast<int>(m_assemblyNode)];
+		
+		const int nodeIndex =
+			static_cast<int>(m_assemblyNode);
+
+		p.nodeTrack.visible = true;
+		p.nodeTrack.activeNode = nodeIndex;
+		p.nodeTrack.nodeCount = 4;
+		p.nodeTrack.activeNodeLabel = nodeNames[nodeIndex];
+
+		// ---------------------------------------------------------
+		// Always construct semantic panel contents.
+		//
+		// panelVisible controls whether ViewPort opens/closes the
+		// panel. Keeping the contents alive prevents invalid access
+		// while the panel is animating out after TAB.
+		// ---------------------------------------------------------
+		appendVolumePanel(p);
+
+		// ---------------------------------------------------------
+		// Runtime status.
+		// ---------------------------------------------------------
+		p.statusLine = nodeNames[nodeIndex];
+
+		// ---------------------------------------------------------
+		// Controls.
+		// ---------------------------------------------------------
 		p.footerLine1 = m_subLayerPanelOpen
-			? "W/S: Select    A/D: Change value    E: Activate    TAB: Hide"
-			: "W/S: Scale / Offset    A/D: Rotate    TAB: Show panel";
-		p.footerLine2 = "E: Advance    Q: Back    RMB: Menu";
+			? "W/S: Select    A/D: Change value    "
+			"E: Activate    TAB: Hide"
+			: "W/S: Scale / Offset    "
+			"A/D: Rotate    TAB: Show panel";
+
+		p.footerLine2 =
+			"E: Advance    Q: Back    RMB: Menu";
 	}
 	return p;
 }
@@ -1767,7 +1802,7 @@ void SingleParticleWorkspace::appendShapePanel(WorkspacePresentation& p) const {
 	p.sections.push_back(debug);
 
 	WorkspacePanelSection traversal;
-	traversal.heading = "Next / Previous Sub-Layer:";
+	traversal.heading = "Next/Prev Sub-Layer:";
 	traversal.rows.push_back(makeRow("[5]: MESH / VOLUME PREVIEW AND EDIT", "",
 		m_activePanelItem == 4));
 	traversal.rows.push_back(makeRow("[6]: RETURN TO COLLISION SETUP", "",
@@ -1805,26 +1840,44 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			m_activePanelItem == 2));
 		p.sections.push_back(output);
 		WorkspacePanelSection back;
-		back.heading = "Previous / Next Sub-layer:";
-		back.rows.push_back(makeRow("[4]: To Sub-Layer_2 Preview", "",
+		back.heading = "Next/Prev Sub-Layer:";
+		back.rows.push_back(makeRow("[4]: LOOP BACK TO SUB-LAYER_0", "",
 			m_activePanelItem == 3));
-		back.rows.push_back(makeRow("[5]: RETURN TO SUB-LAYER_0", "",
+		back.rows.push_back(makeRow("[5]: ASSEMBLY NODES", "",
 			m_activePanelItem == 4));
 		p.sections.push_back(back);
 		return;
 	}
 
 	if (m_assemblyNode == AssemblyNode::Preview) {
+
 		WorkspacePanelSection injection;
 		injection.heading = "Volume Injection:";
-		injection.rows.push_back(makeRow("[1]: Injection Voxels",
-			injectionVoxelName(), m_activePanelItem == 0));
+
+		injection.rows.push_back(
+			makeRow(
+				"[1]: INJECTION VOXELS", 
+				injectionVoxelName(), 
+				m_activePanelItem == 0)
+		);
+
 		p.sections.push_back(injection);
-		WorkspacePanelSection next;
-		next.heading = "Next Node / Sub-Layer:";
-		next.rows.push_back(makeRow("[2]: Edit Object", "", m_activePanelItem == 1));
-		next.rows.push_back(makeRow("[3]: Run MC_Mode", "", m_activePanelItem == 2));
-		p.sections.push_back(next);
+
+		// --- NEXT NODE ---
+		WorkspacePanelSection nextNode;
+
+		nextNode.heading = "Next Node:";
+		nextNode.rows.push_back(makeRow("[2]: EDIT OBJ", "", m_activePanelItem == 1));
+		p.sections.push_back(nextNode);
+
+		// --- Next/Prev Sub-Layer ---
+		WorkspacePanelSection traversal;
+
+		traversal.heading = "Next/Prev Sub-Layer:";
+		traversal.rows.push_back(makeRow("[3]: RUN MC_MODE", "", m_activePanelItem == 2));
+		traversal.rows.push_back(makeRow("[4]: RENDER SETUP", "", m_activePanelItem == 3));
+
+		p.sections.push_back(traversal);
 		return;
 	}
 
@@ -1835,9 +1888,9 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 		edit.heading = hasInjectionVoxelSelected()
 			? "Select Volume To Edit:" : "=== Edit Volume_0 ===";
 		if (hasInjectionVoxelSelected())
-			edit.rows.push_back(makeRow("[1]: Edit", target, m_activePanelItem == 0));
+			edit.rows.push_back(makeRow("[1]: EDIT", target, m_activePanelItem == 0));
 		edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2]: Select Object" : "[1]: Select Object",
+			? "[2]: SELECT OBJ" : "[1]: SELECT OBJ",
 			volumePrimitiveName(),
 			m_activePanelItem == (hasInjectionVoxelSelected() ? 1 : 0)));
 		if (!hasInjectionVoxelSelected() || isEditingInjectionVoxel0()) {
@@ -1845,17 +1898,17 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			std::snprintf(degrees, sizeof(degrees), "%d",
 				rotationSteps[m_rotationIncrementIndex]);
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[3]: Deg" : "[2]: Deg", degrees,
+				? "[3]: DEG" : "[2]: DEG", degrees,
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 2 : 1)));
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[4]: Offset Object" : "[3]: Offset Object", "",
+				? "[4]: OFFSET OBJ" : "[3]: OFFSET OBJ", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 3 : 2)));
 			edit.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[5]: Preview Object" : "[4]: Preview Object", "",
+				? "[5]: PREVIEW OBJ" : "[4]: PREVIEW OBJ", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 3)));
 		}
 		else {
-			edit.rows.push_back(makeRow("[3]: Commit Brush Base", "",
+			edit.rows.push_back(makeRow("[3]: COMMIT BRUSH", "",
 				m_activePanelItem == 2));
 			edit.rows.push_back(makeRow("[4]: MIRROR",
 				m_mirrorMode == MirrorMode::On ? "ON" : "NONE",
@@ -1871,19 +1924,19 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			? "Edit Offset Volume:" : "Offset Grid Vector:";
 		int row = 0;
 		if (hasInjectionVoxelSelected())
-			offset.rows.push_back(makeRow("[1]: Select", target,
+			offset.rows.push_back(makeRow("[1]: SELECT", target,
 				m_activePanelItem == row++));
 		const char* axis = m_offsetVector == OffsetVector::Y ? "Y"
 			: m_offsetVector == OffsetVector::Z ? "Z" : "X";
 		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[2]: Offset" : "[1]: Offset", axis, m_activePanelItem == row++));
+			? "[2]: OFFSET" : "[1]: OFFSET", axis, m_activePanelItem == row++));
 		char increment[32];
 		std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
 		offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-			? "[3]: Increments" : "[2]: Increments", increment,
+			? "[3]: INCREMENTS" : "[2]: INCREMENTS", increment,
 			m_activePanelItem == row++));
 		if (hasInjectionVoxelSelected() && isEditingInjectionVoxel1()) {
-			offset.rows.push_back(makeRow("[4]: Inject",
+			offset.rows.push_back(makeRow("[4]: INJECT",
 				m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE",
 				m_activePanelItem == 3));
 		}
@@ -1891,7 +1944,7 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			if (hasInjectionVoxelSelected()) {
 				char rail[32];
 				std::snprintf(rail, sizeof(rail), "%.2f", m_injectionRailT);
-				offset.rows.push_back(makeRow("[4]: Injection Vector", rail,
+				offset.rows.push_back(makeRow("[4]: INJECTION VECTOR", rail,
 					m_activePanelItem == 3));
 			}
 			const bool ready = canApplyVolumeToBase();
@@ -1900,13 +1953,13 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 					std::to_string(m_volumeBoundaryUnsafeCount) + " PATCHES";
 			WorkspacePanelRow apply = makeRow(hasInjectionVoxelSelected()
 				? (m_injectionMode == InjectionMode::Cut
-					? "[5]: Cut Voxel From Anchor" : "[5]: Fuse Voxel To Anchor")
-				: "[3]: Apply To Base", state,
+					? "[5]: CUT VOXEL" : "[5]: FUSE VOXEL")
+				: "[3]: COMMIT TO BASE", state,
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 4 : 2));
 			apply.selectable = ready;
 			offset.rows.push_back(apply);
 			offset.rows.push_back(makeRow(hasInjectionVoxelSelected()
-				? "[6]: Edit Object" : "[4]: Edit Object", "",
+				? "[6]: EDIT OBJ" : "[4]: EDIT OBJ", "",
 				m_activePanelItem == (hasInjectionVoxelSelected() ? 5 : 3)));
 		}
 		p.sections.push_back(offset);
@@ -1916,11 +1969,11 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 	WorkspacePanelSection apply;
 	apply.heading = std::string("Apply Operation Mode ") +
 		(m_injectionMode == InjectionMode::Cut ? "{ CUT }" : "{ FUSE }");
-	apply.rows.push_back(makeRow("[1]: Commit / Loop Back To Preview", "",
+	apply.rows.push_back(makeRow("[1]: COMMIT / Loop Back To Preview", "",
 		m_activePanelItem == 0));
-	apply.rows.push_back(makeRow("[2]: Preview Object", "",
+	apply.rows.push_back(makeRow("[2]: PREVIEW OBJ", "",
 		m_activePanelItem == 2));
-	apply.rows.push_back(makeRow("[3]: Offset Object", "",
+	apply.rows.push_back(makeRow("[3]: OFFSET OBJ", "",
 		m_activePanelItem == 1));
 	p.sections.push_back(apply);
 }

@@ -60,6 +60,15 @@ struct WorkspaceRuntimeStatus {
 
 };
 
+struct WorkspaceNodeTrackPresentation {
+	bool visible = false;
+
+	std::string activeNodeLabel;
+
+	int activeNode = 0;
+	int nodeCount = 0;
+};
+
 struct WorkspacePresentation {
 	
 	bool panelVisible = false;
@@ -84,7 +93,10 @@ struct WorkspacePresentation {
 	std::string footerLine1;
 	std::string footerLine2;
 
+	WorkspaceNodeTrackPresentation nodeTrack;
+
 	WorkspaceRuntimeStatus runtimeStatus;
 };
+
 
 #endif

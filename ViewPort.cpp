@@ -875,6 +875,81 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		GLUT_BITMAP_HELVETICA_18
 	);
 
+	if (presentation.nodeTrack.visible) {
+		// ---------------------------------------------------------
+		// GOLD Ver004 Sub-Layer-2 assembly node track.
+		// ---------------------------------------------------------
+		glColor4f(0.72f, 0.78f, 0.82f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 100.0f,
+			presentation.nodeTrack.activeNodeLabel.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		const float starX[4] = {
+			x0 + 112.0f,
+			x0 + 252.0f,
+			x0 + 392.0f,
+			x0 + 532.0f
+		};
+
+		// ---------------------------------------------------------
+		// Assembly rail.
+		// ---------------------------------------------------------
+		glColor4f(0.72f, 0.78f, 0.82f, 0.72f * alpha);
+		glBegin(GL_LINES);
+
+		glVertex2f(
+			starX[0] + 8.0f,
+			y0 + 137.0f
+		);
+
+		glVertex2f(
+			starX[3] + 8.0f,
+			y0 + 137.0f
+		);
+
+		glEnd();
+
+		// ---------------------------------------------------------
+		// Node markers.
+		// ---------------------------------------------------------
+		for (int i = 0; i < presentation.nodeTrack.nodeCount; i++) {
+
+			const bool active = presentation.nodeTrack.activeNode == i;
+
+			if (active) glColor4f(0.45f, 1.0f, 0.65f, alpha);
+			else glColor4f(0.55f, 0.62f, 0.68f, alpha);
+
+			// Node marker.
+			drawText2D(
+				starX[i],
+				y0 + 142.0f,
+				"*",
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			char nodeLabel[32];
+
+			snprintf(
+				nodeLabel,
+				sizeof(nodeLabel),
+				"Node_%d",
+				i
+			);
+
+			// Node name inherits same active/inactive color.
+			drawText2D(
+				starX[i] - 18.0f,
+				y0 + 168.0f,
+				nodeLabel,
+				GLUT_BITMAP_HELVETICA_12
+			);
+		}
+	}
+
 	auto drawDivider = [&](float y) {
 
 		glColor4f(0.85f, 0.95f, 1.0f, 0.45f * alpha);
@@ -934,6 +1009,13 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		presentation.sections[1].rows.size() >= 1 &&
 		presentation.sections[2].rows.size() >= 2 &&
 		presentation.sections[3].rows.size() >= 1;
+
+	const bool volumePreviewLayout =
+		presentation.nodeTrack.visible &&
+		presentation.sections.size() == 3 &&
+		presentation.sections[0].rows.size() >= 1 &&
+		presentation.sections[1].rows.size() >= 1 &&
+		presentation.sections[2].rows.size() >= 2;
 
 	// =========================================================
 	// GOLD SUB-LAYER 1 — RENDERING SETUP
@@ -1038,6 +1120,164 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		);
 
 		glLineWidth(1.0f);
+		return;
+	}
+
+	if (volumePreviewLayout) {
+		// =========================================================
+		// NODE DESCRIPTION
+		// =========================================================
+		glColor4f(0.72f, 0.78f, 0.82f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 100.0f,
+			presentation.nodeTrack.activeNodeLabel.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		// =========================================================
+		// GOLD ASSEMBLY NODE TRACK
+		// =========================================================
+		const float starX[4] = {
+			x0 + 112.0f,
+			x0 + 252.0f,
+			x0 + 392.0f,
+			x0 + 532.0f
+		};
+
+		glColor4f(0.72f, 0.78f, 0.82f, 0.72f * alpha);
+
+		glBegin(GL_LINES);
+
+		glVertex2f(
+			starX[0] + 8.0f,
+			y0 + 137.0f
+		);
+
+		glVertex2f(
+			starX[3] + 8.0f,
+			y0 + 137.0f
+		);
+
+		glEnd();
+
+
+		for (int i = 0; i < 4; i++) {
+
+			const bool active =
+				presentation.nodeTrack.activeNode == i;
+
+			if (active) glColor4f(0.45f, 1.0f, 0.65f, alpha);
+			else glColor4f(0.55f, 0.62f, 0.68f, alpha);
+
+			drawText2D(
+				starX[i],
+				y0 + 142.0f,
+				"*",
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			char nodeLabel[32];
+
+			snprintf(
+				nodeLabel,
+				sizeof(nodeLabel),
+				"Node_%d",
+				i
+			);
+
+			drawText2D(
+				starX[i] - 18.0f,
+				y0 + 168.0f,
+				nodeLabel,
+				GLUT_BITMAP_HELVETICA_12
+			);
+		}
+
+		// =========================================================
+		// Divider after assembly track
+		// =========================================================
+		drawDivider(y0 + 195.0f);
+
+		// =========================================================
+		// Volume Injection
+		// =========================================================
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 235.0f,
+			presentation.sections[0].heading.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawSubRow(
+			y0 + 277.0f,
+			presentation.sections[0].rows[0]
+		);
+
+		drawDivider(y0 + 317.0f);
+
+		// =========================================================
+		// Next Node
+		// =========================================================
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 357.0f,
+			presentation.sections[1].heading.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawSubRow(
+			y0 + 399.0f,
+			presentation.sections[1].rows[0]
+		);
+
+		drawDivider(y0 + 439.0f);
+
+
+		// =========================================================
+		// Next / Previous Sub-Layer
+		// =========================================================
+		glColor4f(0.85f, 0.95f, 1.0f, alpha);
+
+		drawText2D(
+			sectionX,
+			y0 + 479.0f,
+			presentation.sections[2].heading.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		drawSubRow(
+			y0 + 521.0f,
+			presentation.sections[2].rows[0]
+		);
+
+		drawSubRow(
+			y0 + 563.0f,
+			presentation.sections[2].rows[1]
+		);
+
+
+		// =========================================================
+		// Footer
+		// =========================================================
+		drawDivider(y1 - 92.0f);
+		glColor4f(0.75f, 0.75f, 0.75f, alpha);
+
+		drawText2D(
+			sectionX,
+			y1 - 58.0f,
+			"W/S: Select    A/D: Change value    "
+			"E: Activate    TAB: Hide    Q: Back",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+
 		return;
 	}
 
