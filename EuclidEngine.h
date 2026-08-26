@@ -133,10 +133,18 @@ private:
 	bool handleHostModalKeyboard(unsigned char rawKey);
 	WorkspacePresentation buildHostModalPresentation() const;
 	bool makeCurrentStaticParticleAsset(vitru::StaticParticleAsset& output) const;
-	void beginStaticParticleLoad();
-	void beginStaticParticleSave(bool saveAs);
-	void beginStaticParticleJob();
-	void advanceStaticParticleJob();
+
+	bool isObjExportModalActive() const;
+
+	// --- NAMED STATIC PARTICLE ASSET JOBS ---
+	void openStaticParticleLoadPanel();
+	void openStaticParticleSaveConfirm(const std::string& displayName);
+	void beginStaticParticleAssetJob();
+	void advanceStaticParticleAssetJob();
+	void closeStaticParticleAssetPanel();
+	bool handleStaticParticleAssetModalKeyboard(const KeyboardInput::KeyEvent& event);
+	bool isStaticParticleAssetModalActive() const;
+
 	void exportCurrentSingleParticleObj();
 	void closeHostModal();
 
@@ -176,17 +184,15 @@ private:
 	std::vector<int> m_workspaceMenuCommands;
 
 	// --- SAVE/LODAD/WRITE SP ASSET MEMBERS ---
-	std::string m_objExportPath = "SINGLE_PARTICLE_DATA/p0.obj";
-
+	ViewPort::ObjExportPanelData m_staticAssetPanel;
 	StaticAssetJobKind m_staticAssetJobKind = StaticAssetJobKind::None;
 	std::future<StaticAssetAsyncResult> m_staticAssetFuture;
+
 	bool m_staticAssetFutureActive = false;
 	int m_staticAssetLastSpinnerMs = 0;
+
 	std::string m_pendingStaticAssetName;
 	std::vector<vitru::StaticAssetCatalogEntry> m_staticAssetCatalog;
-
-	std::future<bool> m_objExportFuture;
-	ObjExportStage m_objExportStage = ObjExportStage::NONE;
 
 	bool m_objExportFutureActive = false;
 	int m_objExportNextStepMs = 0;
@@ -203,6 +209,12 @@ private:
 	TextEntrySession m_hostTextEntry;
 
 	vitru::ProjectAssetRepository m_assetRepository;
+
+	std::future<bool> m_objExportFuture;
+	std::string m_objExportPath = "SINGLE_PARTICLE_DATA/p0.obj";
+
+	ViewPort::ObjExportPanelData m_objExportPanel;
+	ObjExportStage m_objExportStage = ObjExportStage::NONE;
 
 	std::filesystem::path m_inputsRoot = "INPUTS";
 	std::filesystem::path m_outputRoot = "OUTPUT";

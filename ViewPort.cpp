@@ -721,7 +721,9 @@ void ViewPort::drawPresentationFooter(const WorkspacePresentation& presentation)
 // =============================================================================
 // MAIN GENERIC OVERLAY
 // =============================================================================
-void ViewPort::drawOverlay(const WorkspacePresentation& presentation) {
+void ViewPort::drawOverlay(
+	const WorkspacePresentation& presentation,
+	const ObjExportPanelData* modalData) {
 
 	const bool subLayerPanel = presentation.panelLayout == 
 		WorkspacePanelLayout::SubLayer;
@@ -756,6 +758,15 @@ void ViewPort::drawOverlay(const WorkspacePresentation& presentation) {
 			drawPresentationFooter(presentation);
 		}
 	}
+
+	// ---------------------------------------------------------
+	// Host modal must render LAST.
+	//
+	// The active workspace, runtime HUD, and Sub-Layer panel
+	// remain alive underneath it exactly like GOLD.
+	// ---------------------------------------------------------
+	if (modalData && modalData->mode != ObjExportPanelMode::HIDDEN)
+		drawObjExportPanel(*modalData);
 
 	endOverlay2D();
 }
@@ -1023,6 +1034,404 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 		"E: Activate    TAB: Hide    Q: Back",
 		GLUT_BITMAP_HELVETICA_12
 	);
+
+	glLineWidth(1.0f);
+}
+
+void ViewPort::drawObjExportPanel(const ObjExportPanelData& data) {
+	if (data.mode == ObjExportPanelMode::HIDDEN) return;
+
+	const float screenW = static_cast<float>(m_windowWidth);
+	const float screenH = static_cast<float>(m_windowHeight);
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_TEXTURE_2D);
+	glUseProgram(0);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	// ---------------------------------------------------------
+	// Full-screen modal veil.
+	// ---------------------------------------------------------
+	glColor4f(0.0f, 0.0f, 0.0f, 0.68f);
+
+	glBegin(GL_QUADS);
+	glVertex2f(0.0f, 0.0f);
+	glVertex2f(screenW, 0.0f);
+	glVertex2f(screenW, screenH);
+	glVertex2f(0.0f, screenH);
+	glEnd();
+
+	const bool confirmation =
+		data.mode == ObjExportPanelMode::CONFIRM;
+
+	const float panelW =
+		confirmation
+		? 580.0f
+		: min(1120.0f, screenW - 100.0f);
+
+	const float panelH =
+		confirmation
+		? 280.0f
+		: min(660.0f, screenH - 100.0f);
+
+	const float x0 = 0.5f * (screenW - panelW);
+	const float y0 = 0.5f * (screenH - panelH);
+
+	const float x1 = x0 + panelW;
+	const float y1 = y0 + panelH;
+
+	// ---------------------------------------------------------
+	// Main modal body.
+	// ---------------------------------------------------------
+	glColor4f(0.015f, 0.028f, 0.045f, 0.97f);
+
+	glBegin(GL_QUADS);
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+	glEnd();
+
+	glLineWidth(1.5f);
+	glColor4f(0.82f, 0.95f, 1.0f, 0.96f);
+
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(x0, y0);
+	glVertex2f(x1, y0);
+	glVertex2f(x1, y1);
+	glVertex2f(x0, y1);
+	glEnd();
+
+	const float textX = x0 + 38.0f;
+
+	if (data.mode == ObjExportPanelMode::SELECT) {
+
+		glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+
+		drawText2D(textX, y0 + 44.0f,
+			data.titleText.empty() ? "VITRUGEN STATIC PARTICLE LOAD" : data.titleText.c_str(),
+			GLUT_BITMAP_HELVETICA_18);
+
+		glColor4f(0.62f, 0.70f, 0.75f, 1.0f);
+
+		drawText2D(textX, y0 + 76.0f,
+			"Valid VSPA bundles under INPUTS and OUTPUT/STATIC_PARTICLES",
+			GLUT_BITMAP_HELVETICA_12);
+
+		const int first = max(0, data.selectedIndex - 8);
+		const int last = min(static_cast<int>(data.selectionLines.size()), first + 17);
+		float rowY = y0 + 118.0f;
+
+		if (data.selectionLines.empty()) {
+			glColor4f(1.0f, 0.55f, 0.25f, 1.0f);
+			drawText2D(textX, rowY, "No VSPA manifests found.", GLUT_BITMAP_HELVETICA_18);
+		}
+
+		for (int i = first; i < last; i++) {
+
+			const bool active =
+				i == data.selectedIndex;
+
+			glColor4f(active ? 0.45f : 0.72f, active ? 1.0f : 0.80f,
+				active ? 0.65f : 0.84f, 1.0f);
+
+			string row = active ? "> " : "  ";
+			row += data.selectionLines[static_cast<size_t>(i)];
+			drawText2D(textX, rowY, row.c_str(), GLUT_BITMAP_HELVETICA_12);
+			rowY += 28.0f;
+		}
+
+		glColor4f(0.62f, 0.68f, 0.72f, 1.0f);
+
+		drawText2D(textX, y1 - 34.0f,
+			"W/S: Select    E: Load selected asset    Q: Cancel",
+			GLUT_BITMAP_HELVETICA_12);
+
+		return;
+	}
+
+	// =========================================================
+	// Confirmation dialog
+	// =========================================================
+	if (confirmation) {
+
+		glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+		drawText2D(
+			textX,
+			y0 + 52.0f,
+			data.titleText.empty() ? "VITRUGEN OBJ EXPORT" : data.titleText.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		glColor4f(0.72f, 0.78f, 0.82f, 1.0f);
+		drawText2D(
+			textX,
+			y0 + 94.0f,
+			data.confirmText.empty() ? "Confirm Export .OBJ?" : data.confirmText.c_str(),
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		auto drawChoice =
+			[&](float y, bool active, const char* text) {
+
+			if (active) {
+
+				glColor4f(0.45f, 1.0f, 0.65f, 1.0f);
+				drawText2D(
+					textX,
+					y,
+					">",
+					GLUT_BITMAP_HELVETICA_18
+				);
+			}
+			else {
+
+				glColor4f(0.72f, 0.78f, 0.82f, 1.0f);
+			}
+
+			drawText2D(
+				textX + 28.0f,
+				y,
+				text,
+				GLUT_BITMAP_HELVETICA_18
+			);
+		};
+
+		drawChoice(
+			y0 + 142.0f,
+			data.yesSelected,
+			"[1] Yes"
+		);
+
+		drawChoice(
+			y0 + 182.0f,
+			!data.yesSelected,
+			"[2] No"
+		);
+
+		glColor4f(0.62f, 0.68f, 0.72f, 1.0f);
+		drawText2D(
+			textX,
+			y1 - 34.0f,
+			"W/S or A/D: Select    E: Activate    Q: Cancel",
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		glLineWidth(1.0f);
+		return;
+	}
+
+	// =========================================================
+	// Export progress display
+	// =========================================================
+	glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+
+	drawText2D(
+		textX,
+		y0 + 44.0f,
+		data.titleText.empty() ? "VITRUGEN OBJ EXPORT PIPELINE" : data.titleText.c_str(),
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	const char* phaseText =
+		data.mode == ObjExportPanelMode::COMPLETE
+		? "STATUS: COMPLETE"
+		: data.mode == ObjExportPanelMode::FAILED
+		? "STATUS: OPERATION FAILED"
+		: "STATUS: PROCESSING";
+
+	if (data.mode == ObjExportPanelMode::COMPLETE) {
+		glColor4f(0.45f, 1.0f, 0.65f, 1.0f);
+	}
+	else if (data.mode == ObjExportPanelMode::FAILED) {
+		glColor4f(1.0f, 0.35f, 0.22f, 1.0f);
+	}
+	else {
+		glColor4f(0.95f, 0.82f, 0.30f, 1.0f);
+	}
+
+	drawText2D(
+		textX,
+		y0 + 74.0f,
+		phaseText,
+		GLUT_BITMAP_HELVETICA_12
+	);
+
+	// ---------------------------------------------------------
+	// Console-style output window.
+	// ---------------------------------------------------------
+	const float consoleX0 = x0 + 34.0f;
+	const float consoleY0 = y0 + 98.0f;
+	const float consoleX1 = x1 - 34.0f;
+	const float consoleY1 = y1 - 142.0f;
+
+	glColor4f(0.005f, 0.010f, 0.016f, 0.92f);
+
+	glBegin(GL_QUADS);
+	glVertex2f(consoleX0, consoleY0);
+	glVertex2f(consoleX1, consoleY0);
+	glVertex2f(consoleX1, consoleY1);
+	glVertex2f(consoleX0, consoleY1);
+	glEnd();
+
+	glColor4f(0.48f, 0.58f, 0.64f, 0.92f);
+
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(consoleX0, consoleY0);
+	glVertex2f(consoleX1, consoleY0);
+	glVertex2f(consoleX1, consoleY1);
+	glVertex2f(consoleX0, consoleY1);
+	glEnd();
+
+	const int maxVisibleLines = 16;
+
+	const int lineCount =
+		static_cast<int>(data.logLines.size());
+
+	const int firstLine =
+		max(0, lineCount - maxVisibleLines);
+
+	float logY = consoleY0 + 24.0f;
+
+	for (int i = firstLine; i < lineCount; i++) {
+
+		glColor4f(0.72f, 0.82f, 0.86f, 1.0f);
+
+		drawText2D(
+			consoleX0 + 16.0f,
+			logY,
+			data.logLines[i].c_str(),
+			GLUT_BITMAP_HELVETICA_12
+		);
+
+		logY += 20.0f;
+	}
+
+	// ---------------------------------------------------------
+	// Progress bar.
+	//
+	// Twenty slash characters:
+	//     one slash = five percent.
+	// ---------------------------------------------------------
+	const int progress =
+		max(0, min(100, data.progressPercent));
+
+	const int filledSlashes = progress / 5;
+
+	const float progressY = y1 - 92.0f;
+
+	glColor4f(0.82f, 0.90f, 0.94f, 1.0f);
+
+	drawText2D(
+		textX,
+		progressY,
+		"Loading:",
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	float slashX = textX + 92.0f;
+
+	const float slashAdvance =
+		static_cast<float>(glutBitmapWidth(GLUT_BITMAP_HELVETICA_18, '/'));
+
+	for (int i = 0; i < 20; i++) {
+
+		if (i < filledSlashes) {
+			glColor4f(0.30f, 1.0f, 0.55f, 1.0f);
+		}
+		else {
+			glColor4f(0.80f, 0.86f, 0.90f, 0.82f);
+		}
+
+		drawText2D(
+			slashX,
+			progressY,
+			"/",
+			GLUT_BITMAP_HELVETICA_18
+		);
+
+		slashX += slashAdvance;
+	}
+
+	char percentText[32];
+
+	snprintf(
+		percentText,
+		sizeof(percentText),
+		" %d%%",
+		progress
+	);
+
+	glColor4f(0.85f, 0.95f, 1.0f, 1.0f);
+
+	drawText2D(
+		slashX + 8.0f,
+		progressY,
+		percentText,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	// ---------------------------------------------------------
+	// Spinner/status line.
+	// ---------------------------------------------------------
+	const char spinnerFrames[4] = {
+		'/',
+		'-',
+		'\\',
+		'-'
+	};
+
+	char operationLine[256];
+
+	if (data.mode == ObjExportPanelMode::COMPLETE) {
+		snprintf(
+			operationLine,
+			sizeof(operationLine),
+			"Static asset operation ... COMPLETE!"
+		);
+	}
+	else if (data.mode == ObjExportPanelMode::FAILED) {
+		snprintf(
+			operationLine,
+			sizeof(operationLine),
+			"Static asset operation ... FAILED"
+		);
+	}
+	else {
+		snprintf(
+			operationLine,
+			sizeof(operationLine),
+			"Static asset operation ...%c",
+			spinnerFrames[data.spinnerFrame % 4]
+		);
+	}
+
+	if (data.mode == ObjExportPanelMode::FAILED) {
+		glColor4f(1.0f, 0.35f, 0.22f, 1.0f);
+	}
+	else {
+		glColor4f(0.45f, 1.0f, 0.65f, 1.0f);
+	}
+
+	drawText2D(
+		textX,
+		y1 - 50.0f,
+		operationLine,
+		GLUT_BITMAP_HELVETICA_18
+	);
+
+	if (!data.statusText.empty()) {
+		glColor4f(0.68f, 0.74f, 0.78f, 1.0f);
+
+		drawText2D(
+			x1 - 360.0f,
+			y1 - 50.0f,
+			data.statusText.c_str(),
+			GLUT_BITMAP_HELVETICA_12
+		);
+	}
 
 	glLineWidth(1.0f);
 }

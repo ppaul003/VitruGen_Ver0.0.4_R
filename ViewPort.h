@@ -17,6 +17,37 @@
 
 class ViewPort {
 public:
+	enum class ObjExportPanelMode {
+		HIDDEN = 0,
+
+		SELECT,
+		CONFIRM,
+		WORKING,
+		COMPLETE,
+		FAILED
+	};
+
+	struct ObjExportPanelData {
+
+		ObjExportPanelMode mode =
+			ObjExportPanelMode::HIDDEN;
+
+		bool yesSelected = true;
+
+		int progressPercent = 0;
+		int spinnerFrame = 0;
+
+		std::string statusText;
+		std::vector<std::string> logLines;
+
+		std::string titleText;
+		std::string confirmText;
+		std::vector<std::string> selectionLines;
+
+		int selectedIndex = 0;
+	};
+
+public:
 	// =========================================================
 	// LIFECYCLE
 	// =========================================================
@@ -60,7 +91,10 @@ public:
 	// It receives already-prepared presentation data and
 	// renders it using the common VitruGen UI shell.
 	// =========================================================
-	void drawOverlay(const WorkspacePresentation& presentation);
+	void drawOverlay(
+		const WorkspacePresentation& presentation,
+		const ObjExportPanelData* modalData = nullptr
+	);
 
 	// =========================================================
 	// VIEWPORT QUERY
@@ -109,12 +143,14 @@ private:
 	);
 
 	void drawSectionDivider(float y);
-
+	
 	// =========================================================
 	// PANEL POSITION
 	// =========================================================
 	float panelOffsetX() const;
 	float panelX(float x) const { return x + panelOffsetX(); }
+
+	void drawObjExportPanel(const ObjExportPanelData& data);
 
 private:
 	// =========================================================
