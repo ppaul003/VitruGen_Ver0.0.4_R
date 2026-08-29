@@ -15,8 +15,21 @@ struct cudaGraphicsResource;
 
 class SingleParticleWorkspace final : public IWorkspace {
 public:
-	enum class HostRequest { None = 0, LoadStaticParticle, SaveStaticParticle,
-		SaveStaticParticleAs, ExportObj };
+	enum class HostRequest { 
+		None = 0, 
+		LoadStaticParticle, 
+		SaveStaticParticle,
+		SaveStaticParticleAs, 
+		ExportObj 
+	};
+
+	enum class Grid3DWorkspace {
+		Graph3D = 0,
+		SingleParticle,
+		LinkedParticles,
+		Count
+	};
+
 	enum class Layer1Item {
 		Workspace = 0,
 		ParticleType,
@@ -24,10 +37,11 @@ public:
 		Count
 	};
 
-	enum class Grid3DWorkspace {
-		Graph3D = 0,
-		SingleParticle,
-		LinkedParticles,
+	enum class Layer2Item {
+		Color = 0,
+		Radius,
+		RenderMode,
+		Run,
 		Count
 	};
 
@@ -48,14 +62,6 @@ public:
 	enum class ParticleRenderMode {
 		Default = 0,
 		Mesh,
-		Count
-	};
-
-	enum class Layer2Item {
-		Color = 0,
-		Radius,
-		RenderMode,
-		Run,
 		Count
 	};
 
@@ -271,6 +277,7 @@ public:
 	static constexpr int INJECTION_OFFSET_LIST_TARGET = 0;
 	static constexpr int INJECTION_OFFSET_LIST_RAIL = 3;
 
+public: 
 	SingleParticleWorkspace();
 	~SingleParticleWorkspace() override;
 
@@ -383,6 +390,7 @@ public:
 	WorkspaceRuntimeStatus buildRuntimeStatus() const;
 
 private:
+	
 	bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer3Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
@@ -595,14 +603,16 @@ private:
 	ParticleSystem* m_singleParticleSystem = nullptr;
 	std::vector<float> m_particleRadii;
 	std::vector<float>* m_singleParticleRadii = nullptr;
+
 	EuclidRenderer* m_renderer = nullptr;
 	bool m_anchorPlaced = false;
 
-	Layer1Item m_layer1Item = Layer1Item::Workspace;
 	Grid3DWorkspace m_grid3DWorkspace = Grid3DWorkspace::SingleParticle;
-	ObjectType m_objectType = ObjectType::Static;
 
+	Layer1Item m_layer1Item = Layer1Item::Workspace;
 	Layer2Item m_layer2Item = Layer2Item::Color;
+
+	ObjectType m_objectType = ObjectType::Static;
 	ParticleColor m_particleColor = ParticleColor::Red;
 	ParticleRenderMode m_particleRenderMode = ParticleRenderMode::Default;
 	float m_particleRadius = kParticleRadiusDefault;

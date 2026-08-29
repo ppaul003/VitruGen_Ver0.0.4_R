@@ -50,7 +50,7 @@ namespace {
 		if (!windowHandle) {
 
 			windowHandle =
-				FindWindowA(nullptr, "anaheim");
+				FindWindowA(nullptr, "VitruGen Ver0.0.4");
 		}
 
 		if (!windowHandle) {
@@ -222,7 +222,7 @@ void EuclidEngine::initGL(int* argc, char** argv) {
 
 #ifdef _WIN32
 
-	applyVitruGenIconFromFile("VitruGen_Ver004.ico");
+	applyVitruGenIconFromFile("anaheim.ico");
 
 #endif
 
@@ -1197,9 +1197,9 @@ bool EuclidEngine::isStaticParticleAssetModalActive() const {
 }
 
 void EuclidEngine::consumeWorkspaceHostRequest() {
-	using GridRequest = Grid2DWorkspace::HostRequestType;
-	const Grid2DWorkspace::HostRequest gridRequest =
-		m_tesseract.takeGrid2DHostRequest();
+	using GridRequest = TextureMap2DWorkspace::HostRequestType;
+	const TextureMap2DWorkspace::HostRequest gridRequest =
+		m_tesseract.takeTextureMap2DHostRequest();
 
 	if (gridRequest.type == GridRequest::RefreshOutputCatalog) {
 		std::vector<vitru::StaticAssetCatalogEntry> catalog =
@@ -1215,7 +1215,7 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 				}),
 			catalog.end());
 
-		m_tesseract.replaceGrid2DOutputCatalog(std::move(catalog));
+		m_tesseract.replaceTextureMap2DOutputCatalog(std::move(catalog));
 	}
 	else if (gridRequest.type == GridRequest::LoadTarget) {
 		const std::string targetName = gridRequest.target.displayName;
@@ -1229,7 +1229,7 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 				report,
 				nullptr,
 				{})) {
-			m_tesseract.completeGrid2DTargetLoad(
+			m_tesseract.completeTextureMap2DTargetLoad(
 				false,
 				false,
 				vitru::INVALID_ASSET_ID,
@@ -1261,7 +1261,7 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 				m_renderer->loadParticleStaticAsset(*active);
 
 			if (!installed) {
-				m_tesseract.completeGrid2DTargetLoad(
+				m_tesseract.completeTextureMap2DTargetLoad(
 					false,
 					false,
 					vitru::INVALID_ASSET_ID,
@@ -1289,7 +1289,7 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 					ready = texture != nullptr && texture->valid;
 				}
 
-				m_tesseract.completeGrid2DTargetLoad(
+				m_tesseract.completeTextureMap2DTargetLoad(
 					true,
 					ready,
 					assetId,

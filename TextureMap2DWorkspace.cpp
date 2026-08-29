@@ -1,15 +1,17 @@
 #include "renderer_Euclid.h"
-#include "Grid2DWorkspace.h"
+#include "TextureMap2DWorkspace.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
 
+using namespace std;
+
 namespace {
 	WorkspacePanelRow makeRow(
-		const std::string& label,
-		const std::string& value,
+		const string& label,
+		const string& value,
 		bool selected,
 		bool selectable = true) {
 
@@ -29,12 +31,16 @@ namespace {
 	}
 }
 
-bool Grid2DWorkspace::initialize(WorkspaceServices& services) {
+TextureMap2DWorkspace::TextureMap2DWorkspace() = default;
+TextureMap2DWorkspace::~TextureMap2DWorkspace() {
+}
+
+bool TextureMap2DWorkspace::initialize(WorkspaceServices& services) {
 	m_arbiter = services.arbiter;
 	return services.renderer != nullptr && m_arbiter != nullptr;
 }
 
-void Grid2DWorkspace::enter(WorkspaceServices& services) {
+void TextureMap2DWorkspace::enter(WorkspaceServices& services) {
 	if (!m_arbiter) m_arbiter = services.arbiter;
 	if (m_arbiter && m_arbiter->isDomainSelection()) {
 		m_pendingHostRequest = HostRequest{};
@@ -42,11 +48,11 @@ void Grid2DWorkspace::enter(WorkspaceServices& services) {
 	}
 }
 
-void Grid2DWorkspace::exit(WorkspaceServices& services) {
+void TextureMap2DWorkspace::exit(WorkspaceServices& services) {
 	(void)services;
 }
 
-void Grid2DWorkspace::update(
+void TextureMap2DWorkspace::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
@@ -63,7 +69,7 @@ void Grid2DWorkspace::update(
 	}
 }
 
-void Grid2DWorkspace::render(
+void TextureMap2DWorkspace::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
@@ -75,7 +81,7 @@ void Grid2DWorkspace::render(
 		if (m_targetLoaded) {
 			renderer.drawStaticParticleTargetPreview(
 				m_previewParticleRadius,
-				m_layer2Row == Layer2Row::PreviewRadius);
+				m_layer2Item == Layer2Item::PreviewRadius);
 		}
 		return;
 	}
@@ -107,7 +113,7 @@ void Grid2DWorkspace::render(
 		false);
 }
 
-bool Grid2DWorkspace::handleInput(
+bool TextureMap2DWorkspace::handleInput(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
 
@@ -116,6 +122,7 @@ bool Grid2DWorkspace::handleInput(
 	if (m_targetSweepActive) return true;
 
 	if (input.action == WorkspaceInputAction::Back) {
+
 		if (m_arbiter->isWorkspaceConfiguration()) {
 			m_arbiter->requestReturnToDomainSelection(
 				TheArbiter::WorkspaceDomain::GRID_2D,
@@ -131,17 +138,18 @@ bool Grid2DWorkspace::handleInput(
 	if (m_arbiter->isWorkspaceConfiguration()) {
 		switch (input.action) {
 		case WorkspaceInputAction::Previous:
-			m_layer2Row = cycleEnum(m_layer2Row,
-				static_cast<int>(Layer2Row::Count), -1); return true;
+			m_layer2Item = cycleEnum(m_layer2Item,
+				static_cast<int>(Layer2Item::Count), -1); return true;
 		case WorkspaceInputAction::Next:
-			m_layer2Row = cycleEnum(m_layer2Row,
-				static_cast<int>(Layer2Row::Count), +1); return true;
+			m_layer2Item = cycleEnum(m_layer2Item,
+				static_cast<int>(Layer2Item::Count), +1); return true;
 		case WorkspaceInputAction::Decrease:
 			adjustLayer2Value(-1); return true;
 		case WorkspaceInputAction::Increase:
 			adjustLayer2Value(+1); return true;
+
 		case WorkspaceInputAction::Activate:
-			if (m_layer2Row == Layer2Row::RunWorkspaceEdit) {
+			if (m_layer2Item == Layer2Item::RunWorkspaceEdit) {
 				m_statusMessage =
 					"TEXTURE_MAP_2D WORKSPACE EDIT IS DEFERRED IN THIS CHECKPOINT.";
 			}
@@ -162,87 +170,195 @@ bool Grid2DWorkspace::handleInput(
 	}
 }
 
-WorkspacePresentation Grid2DWorkspace::buildPresentation() const {
+WorkspacePresentation TextureMap2DWorkspace::buildPresentation() const {
 	if (m_arbiter && m_arbiter->isWorkspaceConfiguration())
 		return buildLayer2Presentation();
 	return buildLayer1Presentation();
 }
 
-WorkspacePresentation Grid2DWorkspace::buildLayer1TransitionPresentation() const {
+WorkspacePresentation TextureMap2DWorkspace::buildLayer1TransitionPresentation() const {
 	return buildLayer1Presentation();
 }
 
-WorkspacePresentation Grid2DWorkspace::buildLayer1Presentation() const {
+WorkspacePresentation TextureMap2DWorkspace::buildLayer1Presentation() const {
+
 	WorkspacePresentation p;
 	p.panelVisible = true;
-	p.workspaceName = "LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
-	p.layerLabel = "DOMAIN: GRID_2D";
+
+	p.workspaceName = 
+		"LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
+
+	p.layerLabel = 
+		"DOMAIN: GRID_2D";
 
 	WorkspacePanelSection section;
-	section.rows.push_back(makeRow(
-		"[1] GRID_2D SELECTION",
-		workspaceName(),
-		m_layer1Row == Layer1Row::Workspace));
 
-	if (m_workspace == WorkspaceChoice::TextureMap2D) {
-		const vitru::StaticAssetCatalogEntry* target = selectedTarget();
-		std::string targetName = "NO OUTPUT ASSETS";
-		std::string badge = m_catalogReady
-			? "NO OUTPUT ASSETS" : "CATALOG PENDING";
+	// =========================================================
+	// [1] WORKSPACE SELECTION
+	//
+	// TextureMap2DWorkspace no longer owns an internal
+	// GRAPH_2D / TEXTURE_MAP_2D selector enum.
+	//
+	// If A/D changes this row to GRAPH_2D, Arbiter/Tesseract
+	// should physically switch cartridges.
+	// =========================================================
+	section.rows.push_back(
+		makeRow(
+			"[1]: GRID_2D SELECTION", 
+			"TEXTURE_MAP_2D",
+			m_layer1Item == Layer1Item::Workspace
+		)
+	);
 
-		if (target) {
-			targetName = target->displayName;
-			if (m_targetLoaded && targetName == m_loadedTargetName)
-				badge = m_targetReady ? "LOADED | READY" : "LOADED | NOT READY";
-			else badge = target->valid ? "SELECTED | READY" : "SELECTED | INVALID";
+	// =========================================================
+	// [2] TARGET STATIC PARTICLE
+	// =========================================================
+	const vitru::StaticAssetCatalogEntry* target =
+		selectedTarget();
+
+	std::string targetName =
+		"NO OUTPUT ASSETS";
+
+	std::string badge =
+		m_catalogReady
+		? "NO OUTPUT ASSETS"
+		: "CATALOG PENDING";
+
+
+	if (target) {
+
+		targetName =
+			target->displayName;
+
+		if (
+			m_targetLoaded &&
+			targetName ==
+			m_loadedTargetName
+			) {
+
+			badge =
+				m_targetReady
+				? "LOADED | READY"
+				: "LOADED | NOT READY";
 		}
+		else {
 
-		section.rows.push_back(makeRow(
-			"[2] TARGET SP",
-			targetName + " [ " + badge + " ]",
-			m_layer1Row == Layer1Row::Target));
-		section.rows.push_back(makeRow(
-			"[3] LOAD TARGET ASSET", "",
-			m_layer1Row == Layer1Row::LoadTarget));
-		section.rows.push_back(makeRow(
-			"[4] PRESS E TO CONFIGURE SIM", "",
-			m_layer1Row == Layer1Row::Configure));
+			badge =
+				target->valid
+				? "SELECTED | READY"
+				: "SELECTED | INVALID";
+		}
 	}
+
+
+	section.rows.push_back(
+		makeRow(
+			"[2]: TARGET SP",
+			targetName +
+			" [ " + badge + " ]",
+			m_layer1Item == Layer1Item::Target
+		)
+	);
+
+
+	// =========================================================
+	// [3] LOAD TARGET
+	// =========================================================
+	section.rows.push_back(
+		makeRow(
+			"[3]: LOAD TARGET ASSET",
+			"",
+			m_layer1Item == Layer1Item::LoadTarget
+		)
+	);
+
+
+	// =========================================================
+	// [4] CONFIGURE
+	// =========================================================
+	section.rows.push_back(
+		makeRow(
+			"[4]: PRESS E TO CONFIGURE SIM",
+			"",
+			m_layer1Item == Layer1Item::Configure
+		)
+	);
+
 
 	p.sections.push_back(section);
-	if (m_workspace == WorkspaceChoice::Graph2D) {
-		p.statusLine = "GRAPH_2D is reserved for the next pass.";
-		p.statusTone = WorkspaceStatusTone::Warning;
-	}
-	else if (!m_statusMessage.empty()) {
-		p.statusLine = m_statusMessage;
-		p.statusTone = m_targetReady
-			? WorkspaceStatusTone::Ready : WorkspaceStatusTone::Warning;
+
+
+	// =========================================================
+	// STATUS
+	// =========================================================
+
+	if (!m_statusMessage.empty()) {
+
+		p.statusLine =
+			m_statusMessage;
+
+		p.statusTone =
+			m_targetReady
+			? WorkspaceStatusTone::Ready
+			: WorkspaceStatusTone::Warning;
 	}
 	else if (!m_catalogReady) {
-		p.statusLine = "OUTPUT CATALOG IS NOT INITIALIZED.";
-		p.statusTone = WorkspaceStatusTone::Warning;
+
+		p.statusLine =
+			"OUTPUT CATALOG IS NOT INITIALIZED.";
+
+		p.statusTone =
+			WorkspaceStatusTone::Warning;
 	}
 	else if (m_outputCatalog.empty()) {
-		p.statusLine = "NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
-		p.statusTone = WorkspaceStatusTone::Warning;
+
+		p.statusLine =
+			"NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
+
+		p.statusTone =
+			WorkspaceStatusTone::Warning;
 	}
-	else if (const vitru::StaticAssetCatalogEntry* target = selectedTarget()) {
-		p.statusLine = target->valid
-			? "SELECTED TARGET: " + target->displayName +
-				" | LOAD TARGET ASSET WITH ROW [3]."
-			: "SELECTED TARGET INVALID: " + target->displayName +
-				" | CONFIGURATION LOCKED.";
-		p.statusTone = target->valid
-			? WorkspaceStatusTone::Neutral : WorkspaceStatusTone::Warning;
+	else if (target) {
+
+		// -----------------------------------------------------
+		// Keep this deliberately short so the status remains
+		// inside the Layer-1 side panel.
+		// -----------------------------------------------------
+		if (target->valid) {
+
+			p.statusLine =
+				"TARGET SELECTED: " +
+				target->displayName;
+
+			p.statusTone =
+				WorkspaceStatusTone::Neutral;
+		}
+		else {
+
+			p.statusLine =
+				"TARGET INVALID: " +
+				target->displayName;
+
+			p.statusTone =
+				WorkspaceStatusTone::Warning;
+		}
 	}
 
-	p.footerLine1 = "W / S: Select list     A / D: Change value";
-	p.footerLine2 = "E: Activate selected row     Q: Back one layer";
+	// =========================================================
+	// FOOTER
+	// =========================================================
+	p.footerLine1 =
+		"W / S: Select list     "
+		"A / D: Change value";
+
+	p.footerLine2 =
+		"E: Activate selected row     "
+		"Q: Back one layer";
+
 	return p;
 }
 
-WorkspacePresentation Grid2DWorkspace::buildLayer2Presentation() const {
+WorkspacePresentation TextureMap2DWorkspace::buildLayer2Presentation() const {
 	WorkspacePresentation p;
 	p.panelVisible = true;
 	p.workspaceName = "LAYER 2 -> TEXTURE_MAP_2D TARGET CONFIGURATION";
@@ -250,11 +366,21 @@ WorkspacePresentation Grid2DWorkspace::buildLayer2Presentation() const {
 
 	WorkspacePanelSection target;
 	target.heading = "TARGET SP:";
-	target.rows.push_back(makeRow(
-		"{ " + (m_loadedTargetName.empty() ? std::string("NO TARGET") : m_loadedTargetName) + " }",
-		m_targetReady ? "[ LOADED | READY ]" : "[ UNAVAILABLE ]",
-		false,
-		false));
+
+	target.rows.push_back(
+		makeRow(
+			"{ " + (m_loadedTargetName.empty() 
+				? string("NO TARGET") 
+				: m_loadedTargetName) 
+			+ " }",
+			m_targetReady 
+				? "[ LOADED | READY ]"
+				: "[ UNAVAILABLE ]",
+			false,
+			false
+		)
+	);
+
 	target.notes.push_back("3D PREVIEW:");
 	target.notes.push_back("{ TEXTURED STATIC PARTICLE }");
 	p.sections.push_back(target);
@@ -263,16 +389,16 @@ WorkspacePresentation Grid2DWorkspace::buildLayer2Presentation() const {
 	char radius[32];
 	std::snprintf(radius, sizeof(radius), "%.4f", m_previewParticleRadius);
 	config.rows.push_back(makeRow(
-		"[1] PREVIEW PARTICLE RADIUS", radius,
-		m_layer2Row == Layer2Row::PreviewRadius));
+		"[1]: PREVIEW PARTICLE RADIUS", radius,
+		m_layer2Item == Layer2Item::PreviewRadius));
 	const std::string grid = std::to_string(m_pixelGridDivisions) + " x " +
 		std::to_string(m_pixelGridDivisions);
 	config.rows.push_back(makeRow(
-		"[2] PIXEL GRID", grid,
-		m_layer2Row == Layer2Row::PixelGrid));
+		"[2]: PIXEL GRID", grid,
+		m_layer2Item == Layer2Item::PixelGrid));
 	config.rows.push_back(makeRow(
-		"[3] RUN WORKSPACE EDIT", "",
-		m_layer2Row == Layer2Row::RunWorkspaceEdit));
+		"[3]: RUN WORKSPACE EDIT", "",
+		m_layer2Item == Layer2Item::RunWorkspaceEdit));
 	p.sections.push_back(config);
 
 	if (!m_statusMessage.empty() &&
@@ -285,63 +411,95 @@ WorkspacePresentation Grid2DWorkspace::buildLayer2Presentation() const {
 	return p;
 }
 
-void Grid2DWorkspace::moveLayer1Cursor(int direction) {
-	if (m_workspace == WorkspaceChoice::Graph2D) {
-		m_layer1Row = Layer1Row::Workspace;
-		return;
-	}
-	m_layer1Row = cycleEnum(
-		m_layer1Row,
-		static_cast<int>(Layer1Row::Count),
-		direction);
+void TextureMap2DWorkspace::moveLayer1Cursor(int direction) {
+	if (direction == 0) return;
+
+	m_layer1Item = cycleEnum(
+		m_layer1Item,
+		static_cast<int>(Layer1Item::Count),
+		direction
+	);
 }
 
-void Grid2DWorkspace::adjustLayer1Value(
+void TextureMap2DWorkspace::adjustLayer1Value(
 	int direction,
 	WorkspaceServices& services) {
 
 	if (direction == 0) return;
-	if (m_layer1Row == Layer1Row::Workspace) {
-		m_workspace = cycleEnum(
-			m_workspace,
-			static_cast<int>(WorkspaceChoice::Count),
-			direction);
-		m_layer1Row = Layer1Row::Workspace;
-		invalidateTarget();
+
+
+	// =====================================================
+	// [1] SWITCH WORKSPACE
+	// =====================================================
+	if (m_layer1Item == Layer1Item::Workspace) {
+
 		if (services.arbiter)
-			services.arbiter->setActiveWorkspace(selectedWorkspaceId());
+			services.arbiter->setActiveWorkspace(TheArbiter::WorkspaceId::GRAPH_2D);
+
 		return;
 	}
 
-	if (m_layer1Row == Layer1Row::Target && !m_outputCatalog.empty()) {
-		const int count = static_cast<int>(m_outputCatalog.size());
-		const int step = direction < 0 ? -1 : 1;
-		m_selectedTargetIndex = static_cast<std::size_t>(
-			(static_cast<int>(m_selectedTargetIndex) + step + count) % count);
+
+	// =====================================================
+	// [2] TARGET CATALOG
+	// =====================================================
+	if (m_layer1Item == Layer1Item::Target && !m_outputCatalog.empty()) {
+
+		const int count =
+			static_cast<int>(m_outputCatalog.size());
+
+		const int step =
+			direction < 0
+			? -1
+			: 1;
+
+		m_selectedTargetIndex =
+			static_cast<std::size_t>(
+				(static_cast<int>(m_selectedTargetIndex) + 
+					step + count) % count);
+
 		invalidateTarget();
 	}
 }
 
-void Grid2DWorkspace::activateLayer1(WorkspaceServices& services) {
-	if (m_workspace != WorkspaceChoice::TextureMap2D) return;
+void TextureMap2DWorkspace::activateLayer1(WorkspaceServices& services) {
+	// =====================================================
+	// [2] TARGET
+	//
+	// E does not need to do anything here unless GOLD
+	// explicitly gives it activation behavior.
+	// =====================================================
+	if (m_layer1Item == Layer1Item::Target) return;
 
-	if (m_layer1Row == Layer1Row::LoadTarget) {
+	// =====================================================
+	// [3] LOAD TARGET
+	// =====================================================
+	if (m_layer1Item == Layer1Item::LoadTarget) {
+
 		const vitru::StaticAssetCatalogEntry* target = selectedTarget();
+
 		if (!target || !target->valid) {
 			m_statusMessage = target
 				? "SELECTED STATIC PARTICLE MANIFEST IS INVALID."
 				: "NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
 			return;
 		}
+
 		m_pendingHostRequest = HostRequest{};
 		m_pendingHostRequest.type = HostRequestType::LoadTarget;
 		m_pendingHostRequest.target = *target;
 		m_pendingHostRequest.replaceAssetId = m_targetAssetId;
-		m_statusMessage = "LOADING TARGET: " + target->displayName + "...";
+		m_statusMessage = "LOADING TARGET: " +
+			target->displayName +
+			"...";
+
 		return;
 	}
 
-	if (m_layer1Row == Layer1Row::Configure) {
+	// =====================================================
+    // [4] CONFIGURE
+    // =====================================================
+	if (m_layer1Item == Layer1Item::Configure) {
 		if (!m_targetLoaded || !m_targetReady || m_targetSweepActive) {
 			m_statusMessage = "TARGET CONFIGURATION LOCKED: LOAD A READY TARGET FIRST.";
 			return;
@@ -354,9 +512,9 @@ void Grid2DWorkspace::activateLayer1(WorkspaceServices& services) {
 	}
 }
 
-void Grid2DWorkspace::adjustLayer2Value(int direction) {
+void TextureMap2DWorkspace::adjustLayer2Value(int direction) {
 	if (direction == 0) return;
-	if (m_layer2Row == Layer2Row::PreviewRadius) {
+	if (m_layer2Item == Layer2Item::PreviewRadius) {
 		static constexpr std::array<float, 17> presets{
 			0.0039f, 0.0046f, 0.0054f, 0.0061f, 0.0068f, 0.0076f,
 			0.0083f, 0.0091f, 0.0098f, 0.0105f, 0.0113f, 0.0120f,
@@ -369,7 +527,7 @@ void Grid2DWorkspace::adjustLayer2Value(int direction) {
 		if (direction > 0 && index + 1 < presets.size()) ++index;
 		m_previewParticleRadius = presets[index];
 	}
-	else if (m_layer2Row == Layer2Row::PixelGrid) {
+	else if (m_layer2Item == Layer2Item::PixelGrid) {
 		static constexpr std::array<std::uint32_t, 3> presets{ 32u, 64u, 128u };
 		std::size_t index = m_pixelGridDivisions == 32u ? 0u
 			: m_pixelGridDivisions == 128u ? 2u : 1u;
@@ -379,23 +537,12 @@ void Grid2DWorkspace::adjustLayer2Value(int direction) {
 	}
 }
 
-const char* Grid2DWorkspace::workspaceName() const {
-	return m_workspace == WorkspaceChoice::TextureMap2D
-		? "TEXTURE_MAP_2D" : "GRAPH_2D";
-}
-
-TheArbiter::WorkspaceId Grid2DWorkspace::selectedWorkspaceId() const {
-	return m_workspace == WorkspaceChoice::TextureMap2D
-		? TheArbiter::WorkspaceId::TEXTURE_MAP_2D
-		: TheArbiter::WorkspaceId::GRAPH_2D;
-}
-
-const vitru::StaticAssetCatalogEntry* Grid2DWorkspace::selectedTarget() const {
+const vitru::StaticAssetCatalogEntry* TextureMap2DWorkspace::selectedTarget() const {
 	return m_selectedTargetIndex < m_outputCatalog.size()
 		? &m_outputCatalog[m_selectedTargetIndex] : nullptr;
 }
 
-void Grid2DWorkspace::invalidateTarget() {
+void TextureMap2DWorkspace::invalidateTarget() {
 	m_targetLoaded = false;
 	m_targetReady = false;
 	m_targetAssetId = vitru::INVALID_ASSET_ID;
@@ -405,13 +552,13 @@ void Grid2DWorkspace::invalidateTarget() {
 	m_planeProgress = 1.0f;
 }
 
-Grid2DWorkspace::HostRequest Grid2DWorkspace::takeHostRequest() {
+TextureMap2DWorkspace::HostRequest TextureMap2DWorkspace::takeHostRequest() {
 	const HostRequest request = m_pendingHostRequest;
 	m_pendingHostRequest = HostRequest{};
 	return request;
 }
 
-void Grid2DWorkspace::replaceOutputCatalog(
+void TextureMap2DWorkspace::replaceOutputCatalog(
 	std::vector<vitru::StaticAssetCatalogEntry> catalog) {
 
 	m_outputCatalog = std::move(catalog);
@@ -420,7 +567,7 @@ void Grid2DWorkspace::replaceOutputCatalog(
 	m_statusMessage.clear();
 }
 
-void Grid2DWorkspace::completeTargetLoad(
+void TextureMap2DWorkspace::completeTargetLoad(
 	bool loaded,
 	bool ready,
 	vitru::AssetId assetId,

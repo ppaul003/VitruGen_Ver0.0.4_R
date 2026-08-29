@@ -46,10 +46,20 @@ bool Tesseract::initialize(WorkspaceServices services) {
 		return false;
 	}
 
-	if (!m_grid2DWorkspace.initialize(m_services)) {
+	if (!m_graph2DWorkspace.initialize(m_services)) {
+
 		printf(
 			"[Tesseract] ERROR: "
-			"Grid2DWorkspace initialization failed.\n");
+			"Graph2DWorkspace initialization failed.\n"
+		);
+
+		return false;
+	}
+
+	if (!m_texMap2DWorkspace.initialize(m_services)) {
+		printf(
+			"[Tesseract] ERROR: "
+			"Texture2DWorkspace initialization failed.\n");
 		return false;
 	}
 
@@ -127,7 +137,7 @@ void Tesseract::render(const WorkspaceFrameContext& frame) {
 
 		case DomainTransitionPhase::ENTER_WORKSPACE_CAMERA:
 		case DomainTransitionPhase::EXIT_WORKSPACE_CAMERA:
-			m_grid2DWorkspace.render(frame, m_services);
+			m_texMap2DWorkspace.render(frame, m_services);
 			return;
 
 		case DomainTransitionPhase::EXIT_CAMERA:
@@ -222,10 +232,10 @@ Tesseract::presentation() const {
 			return p;
 		}
 		case DomainTransitionPhase::ENTER_CAMERA:
-			return m_grid2DWorkspace.buildLayer1TransitionPresentation();
+			return m_texMap2DWorkspace.buildLayer1TransitionPresentation();
 
 		case DomainTransitionPhase::ENTER_WORKSPACE_CAMERA: {
-			WorkspacePresentation p = m_grid2DWorkspace.buildPresentation();
+			WorkspacePresentation p = m_texMap2DWorkspace.buildPresentation();
 			p.statusLine = "AUTO: Transitioning To TEXTURE_MAP_2D TARGET CONFIGURATION...";
 			p.statusTone = WorkspaceStatusTone::Transition;
 			p.statusBlink = true;
@@ -234,7 +244,7 @@ Tesseract::presentation() const {
 			return p;
 		}
 		case DomainTransitionPhase::EXIT_WORKSPACE_CAMERA:
-			return m_grid2DWorkspace.buildPresentation();
+			return m_texMap2DWorkspace.buildPresentation();
 
 		default:
 			break;
@@ -340,22 +350,24 @@ Tesseract::takeSingleParticleHostRequest() {
 	return m_singleParticleWorkspace.takeHostRequest();
 }
 
-Grid2DWorkspace::HostRequest Tesseract::takeGrid2DHostRequest() {
-	return m_grid2DWorkspace.takeHostRequest();
+TextureMap2DWorkspace::HostRequest
+Tesseract::takeTextureMap2DHostRequest() {
+	return m_texMap2DWorkspace.takeHostRequest();
 }
 
-void Tesseract::replaceGrid2DOutputCatalog(
-	std::vector<vitru::StaticAssetCatalogEntry> catalog) {
-	m_grid2DWorkspace.replaceOutputCatalog(std::move(catalog));
+void Tesseract::replaceTextureMap2DOutputCatalog(
+	vector<vitru::StaticAssetCatalogEntry> catalog) {
+
+	m_texMap2DWorkspace.replaceOutputCatalog(move(catalog));
 }
 
-void Tesseract::completeGrid2DTargetLoad(
+void Tesseract::completeTextureMap2DTargetLoad(
 	bool loaded,
 	bool ready,
 	vitru::AssetId assetId,
 	const std::string& displayName,
 	const std::string& message) {
-	m_grid2DWorkspace.completeTargetLoad(
+	m_texMap2DWorkspace.completeTargetLoad(
 		loaded, ready, assetId, displayName, message);
 }
 
@@ -647,12 +659,13 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		// Only NOW commit Layer 1.
 		// -----------------------------------------------------
 		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
+
 		if (m_transitionDomain == Domain::GRID_2D) {
-			m_services.arbiter->setActiveWorkspace(
-				m_grid2DWorkspace.selectedWorkspaceId());
+
+			m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_2D);
+
 			if (m_services.camera)
-				m_services.camera->setBehaviorMode(
-					CameraProcessor::CAM_STANDARD_2D_LOCKED);
+				m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
 		}
 		else if (m_services.camera) {
 			m_services.camera->setBehaviorMode(
@@ -735,7 +748,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 	// GRID_2D LAYER 1 -> LAYER 2 CAMERA
 	// =========================================================
 	case DomainTransitionPhase::ENTER_WORKSPACE_CAMERA:
-		m_grid2DWorkspace.update(frame, m_services);
+		m_texMap2DWorkspace.update(frame, m_services);
 		if (m_services.camera) {
 			m_services.camera->updatePoseTransition(frame.deltaTime);
 			if (m_services.camera->poseTransitionActive()) return;
@@ -754,7 +767,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 	// GRID_2D LAYER 2 -> LAYER 1 CAMERA
 	// =========================================================
 	case DomainTransitionPhase::EXIT_WORKSPACE_CAMERA:
-		m_grid2DWorkspace.update(frame, m_services);
+		m_texMap2DWorkspace.update(frame, m_services);
 		if (m_services.camera) {
 			m_services.camera->updatePoseTransition(frame.deltaTime);
 			if (m_services.camera->poseTransitionActive()) return;
@@ -781,14 +794,35 @@ void Tesseract::synchronizeActiveCartridge() {
 	IWorkspace* desired = &m_diagnosticIdle;
 	const char* desiredName = "DIAGNOSTIC_IDLE";
 
+	// =========================================================
+	// GRID_2D
+	// =========================================================
 	if (!m_services.arbiter->isGlobalShell() &&
-		m_services.arbiter->getWorkspaceDomain() ==
+		m_services.arbiter->getWorkspaceDomain() == 
 		TheArbiter::WorkspaceDomain::GRID_2D) {
 
-		desired = &m_grid2DWorkspace;
-		desiredName = "GRID_2D_SELECTOR";
+		using Workspace = TheArbiter::WorkspaceId;
+		switch (m_services.arbiter->getActiveWorkspace()) {
+			
+		case Workspace::GRAPH_2D:
+			desired = &m_graph2DWorkspace;
+			break;
+
+		case Workspace::TEXTURE_MAP_2D:
+			desired = &m_texMap2DWorkspace;
+			desiredName = "TEXTRUE_MAP_2D";
+			break;
+
+		default:
+			desired = &m_graph2DWorkspace;
+			desiredName = "GRAPH_2D";
+			break;
+		}
 	}
 
+	// =========================================================
+	// GRID_3D
+	// =========================================================
 	if (!m_services.arbiter->isGlobalShell() &&
 		m_services.arbiter->getWorkspaceDomain() ==
 		TheArbiter::WorkspaceDomain::GRID_3D) {

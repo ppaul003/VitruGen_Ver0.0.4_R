@@ -16,9 +16,10 @@
 #include "renderer_Euclid.h"
 
 #include "DiagnosticIdle.h"
-#include "Grid2DWorkspace.h"
 #include "ParticleSimWorkspace.h"
 #include "SingleParticleWorkspace.h"
+#include "Graph2DWorkspace.h"
+#include "TextureMap2Dworkspace.h"
 
 struct cudaGraphicsResource;
 
@@ -53,15 +54,18 @@ public:
 	WorkspaceMenuPresentation menu() const;
 	bool handleMenuCommand(int command);
 	SingleParticleWorkspace::HostRequest takeSingleParticleHostRequest();
-	Grid2DWorkspace::HostRequest takeGrid2DHostRequest();
-	void replaceGrid2DOutputCatalog(
-		std::vector<vitru::StaticAssetCatalogEntry> catalog);
-	void completeGrid2DTargetLoad(
+
+	TextureMap2DWorkspace::HostRequest takeTextureMap2DHostRequest();
+	void replaceTextureMap2DOutputCatalog(std::vector<vitru::StaticAssetCatalogEntry> catalog);
+
+	void completeTextureMap2DTargetLoad(
 		bool loaded,
 		bool ready,
 		vitru::AssetId assetId,
 		const std::string& displayName,
-		const std::string& message);
+		const std::string& message
+	);
+
 	bool exportSingleParticleVolume(std::vector<float>& output) const;
 	bool restoreSingleParticleVolume(const std::vector<float>& input, const int3& size);
 	const int3& singleParticleVolumeSize() const;
@@ -76,7 +80,7 @@ public:
 	void updateDomainTransition(const WorkspaceFrameContext& frame);
 	bool domainTransitionActive() const { return m_domainTransitionPhase != DomainTransitionPhase::NONE; }
 	bool workspaceInputLocked() const {
-		return domainTransitionActive() || m_grid2DWorkspace.automaticTransitionActive();
+		return domainTransitionActive() || m_texMap2DWorkspace.automaticTransitionActive();
 	}
 
 private:
@@ -89,16 +93,18 @@ private:
 	
 	WorkspaceServices m_services;
 	DiagnosticIdle m_diagnosticIdle;
-	Grid2DWorkspace m_grid2DWorkspace;
+	//Grid2DWorkspace m_grid2DWorkspace;
+
+	ParticleSimWorkspace m_particleSimWorkspace; // OFFLINE
+	SingleParticleWorkspace m_singleParticleWorkspace;
+	Graph2DWorkspace m_graph2DWorkspace; // OFFLINE
+	TextureMap2DWorkspace m_texMap2DWorkspace;
 
 	DomainTransitionPhase m_domainTransitionPhase =
 		DomainTransitionPhase::NONE;
 
 	TheArbiter::WorkspaceDomain m_transitionDomain =
 		TheArbiter::WorkspaceDomain::NONE;
-
-	ParticleSimWorkspace m_particleSimWorkspace;
-	SingleParticleWorkspace m_singleParticleWorkspace;
 
 	float m_transitionPhaseElapsed = 0.0f;
 

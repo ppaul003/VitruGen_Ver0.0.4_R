@@ -88,7 +88,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DiagnosticIdle.cpp" />
     <ClCompile Include="EuclidEngine.cpp" />
-    <ClCompile Include="Grid2DWorkspace.cpp" />
+    <ClCompile Include="Graph2DWorkspace.cpp" />
     <ClCompile Include="JsonValue.cpp" />
     <ClCompile Include="marchingCubes.cpp" />
     <ClCompile Include="MeshGeometry.cpp" />
@@ -104,6 +104,7 @@
     <ClCompile Include="StaticParticleAsset.cpp" />
     <ClCompile Include="StaticParticleAssetIO.cpp" />
     <ClCompile Include="TextEntry.cpp" />
+    <ClCompile Include="TextureMap2DWorkspace.cpp" />
     <ClCompile Include="TheArbiter.cpp" />
     <ClCompile Include="TheTesseract.cpp" />
     <ClCompile Include="ViewPort.cpp" />
@@ -123,7 +124,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DiagnosticIdle.h" />
     <ClInclude Include="EuclidEngine.h" />
-    <ClInclude Include="Grid2DWorkspace.h" />
+    <ClInclude Include="Graph2DWorkspace.h" />
     <ClInclude Include="Interactions.h" />
     <ClInclude Include="IWorkspace.h" />
     <ClInclude Include="JsonValue.h" />
@@ -146,6 +147,7 @@
     <ClInclude Include="StaticParticleAssetIO.h" />
     <ClInclude Include="tables.h" />
     <ClInclude Include="TextEntry.h" />
+    <ClInclude Include="TextureMap2DWorkspace.h" />
     <ClInclude Include="TheArbiter.h" />
     <ClInclude Include="TheTesseract.h" />
     <ClInclude Include="ViewPort.h" />
