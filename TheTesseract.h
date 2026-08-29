@@ -32,10 +32,23 @@ public:
 
 		ENTER_DOMAIN_VISUAL,
 		ENTER_DOMAIN_READY,
+
+		// GRID_3D
 		ENTER_CAMERA,
+
 		ENTER_WORKSPACE_CAMERA,
 
+		// GRID_2D
+		ENTER_2D_CAMERA_Z,
+		ENTER_2D_CAMERA_X,
+
+		// GRID_3D
 		EXIT_CAMERA,
+
+		// GRID_2D
+		EXIT_2D_CAMERA_X,
+		EXIT_2D_CAMERA_Z,
+
 		EXIT_DOMAIN_VISUAL,
 		EXIT_WORKSPACE_CAMERA
 	};
@@ -92,11 +105,12 @@ private:
 private:
 	static constexpr float kGrid3DCamTransDuration = 0.75f;
 	static constexpr float kGrid3DReadyHoldDuration = 0.35f;
-	
-	WorkspaceServices m_services;
-	DiagnosticIdle m_diagnosticIdle;
-	//Grid2DWorkspace m_grid2DWorkspace;
+	static constexpr float kGrid3DCamTransCenter2D = 0.45f;
+	static constexpr float kGrid3DCamTransStandard2D = 0.30f;
 
+	DiagnosticIdle m_diagnosticIdle;
+
+	WorkspaceServices m_services;
 	ParticleSimWorkspace m_particleSimWorkspace; // OFFLINE
 	Graph3DWorkspace m_graph3DWorkspace; // OFFLINE
 	SingleParticleWorkspace m_singleParticleWorkspace;

@@ -96,21 +96,28 @@ void TextureMap2DWorkspace::render(
 
 	EuclidRenderer::GridDisplay display;
 	display.boundary = true;
-	display.majorGrid = true;
+	display.majorGrid = false;
 	display.minorGrid = false;
-	display.axes = true;
+	display.axes = false;
 
 	const float planeZ = grid.origin.z + boxSize * m_planeProgress;
 	renderer.drawUniformGridZRange(
 		grid,
 		planeZ,
 		grid.origin.z + boxSize,
-		display);
-	renderer.drawGridPlane(
-		grid,
-		EuclidRenderer::GridPlane::PLANE_XY,
-		planeZ,
-		false);
+		display
+	);
+
+	if (m_targetSweepActive || m_planeProgress > 0.0f) {
+
+		renderer.drawGridPlane(
+			grid,
+			EuclidRenderer::GridPlane::PLANE_XY,
+			planeZ,
+			false
+		);
+	}
+	
 }
 
 bool TextureMap2DWorkspace::handleInput(

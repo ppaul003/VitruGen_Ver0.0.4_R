@@ -5,6 +5,15 @@
 
 using namespace std;
 
+namespace {
+
+	constexpr float kStandard2DX = 1.40f;
+	constexpr float kStandard2DY = 0.00f;
+	constexpr float kStandard2DZ = -6.00f;
+
+	constexpr float kPreMenu2DZ = -8.00f;
+}
+
 static float clampCameraFloat(float v, float lo, float hi) {
 	if (v < lo) return lo;
 	if (v > hi) return hi;
@@ -196,13 +205,31 @@ void CameraProcessor::beginTransitionToStandard3D(float duration) {
 	m_poseTransitionActive = true;
 }
 
-void CameraProcessor::beginTransitionToStandard2D(float duration) {
-	// The complete 4x4 XY workplane fits comfortably at z=-5 under
-	// the host's existing 60-degree perspective projection.
+void CameraProcessor::beginTransitionToCentered2D(float duration) {
+
 	beginTransitionToPose(
-		0.0f, 0.0f, -5.0f,
+		0.0f, 0.0f, kStandard2DZ,
 		0.0f, 0.0f, 0.0f,
-		duration);
+		duration
+	);
+}
+
+void CameraProcessor::beginTransitionToStandard2D(float duration) {
+
+	beginTransitionToPose(
+		kStandard2DX, kStandard2DY, kStandard2DZ,
+		0.0f, 0.0f, 0.0f,
+		duration
+	);
+}
+
+void CameraProcessor::beginTransitionToPreMenu2D(float duration) {
+
+	beginTransitionToPose(
+		0.0f, 0.0f, kPreMenu2DZ,
+		0.0f, 0.0f, 0.0f,
+		duration
+	);
 }
 
 void CameraProcessor::beginTransitionToStandardObject(float duration) {
@@ -414,9 +441,11 @@ void CameraProcessor::focusStandard3DView() {
 }
 
 void CameraProcessor::focusStandard2DView() {
-	m_camera_trans[0] = 0.0f;
-	m_camera_trans[1] = 0.0f;
-	m_camera_trans[2] = -5.0f;
+
+	m_camera_trans[0] = kStandard2DX;
+	m_camera_trans[1] = kStandard2DY;
+	m_camera_trans[2] = kStandard2DZ;
+
 	m_camera_rot[0] = 0.0f;
 	m_camera_rot[1] = 0.0f;
 	m_camera_rot[2] = 0.0f;

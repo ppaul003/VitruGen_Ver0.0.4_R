@@ -7,6 +7,7 @@
 #include <cstdio>
 
 using namespace std;
+using namespace glm;
 
 namespace {
     WorkspacePanelRow makeRow(
@@ -57,11 +58,40 @@ void Graph2DWorkspace::update(
 }
 
 void Graph2DWorkspace::render(
-    const WorkspaceFrameContext& frame,
+    const WorkspaceFrameContext& frame, 
     WorkspaceServices& services) {
 
     (void)frame;
-    (void)services;
+
+    if (!services.renderer) return;
+
+    EuclidRenderer& renderer = *services.renderer;
+    EuclidRenderer::UniformGrid grid;
+
+    const float boxSize =
+        static_cast<float>(renderer.getSimBoxSize());
+
+    const float halfBox = boxSize * 0.5f;
+
+    grid.dimensions = ivec3(64);
+    grid.origin = vec3(-halfBox);
+    grid.cellSize = vec3(boxSize / 64.0f);
+    grid.majorEvery = 8;
+
+    // =====================================================
+    // Stable GRID_2D domain visual
+    //
+    // Collapsed XY plane held at the +Z/front face.
+    // No 3D lattice. No cube.
+    // =====================================================
+    const float planeZ = grid.origin.z + boxSize;
+
+    renderer.drawGridPlane(
+        grid,
+        EuclidRenderer::GridPlane::PLANE_XY,
+        planeZ,
+        false
+    );
 }
 
 bool Graph2DWorkspace::handleInput(

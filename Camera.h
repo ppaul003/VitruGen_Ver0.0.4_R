@@ -94,12 +94,20 @@ public:
 		float minStep
 	) const;
 
+	void beginTransitionToCentered2D(float duration = 0.45f);
+	void beginTransitionToStandard2D(float duration = 0.35f);
+	void beginTransitionToPreMenu2D(float duration = 0.45f);
+
 	void beginTransitionToStandard3D(float duration = 1.25f);
-	void beginTransitionToStandard2D(float duration = 1.25f);
+
 	void beginTransitionToStandardObject(float duration = 1.25f);
 	void beginTransitionToMenu(float duration = 1.25f);
 	void updatePoseTransition(float deltaTime);
 	bool poseTransitionActive() const { return m_poseTransitionActive; }
+
+	
+	
+	
 
 private:
 	void beginTransitionToPose(

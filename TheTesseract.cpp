@@ -152,13 +152,26 @@ void Tesseract::render(const WorkspaceFrameContext& frame) {
 			m_diagnosticIdle.render(frame, m_services);
 			return;
 
+		case DomainTransitionPhase::ENTER_2D_CAMERA_Z:
+		case DomainTransitionPhase::ENTER_2D_CAMERA_X:
+			m_diagnosticIdle.render(frame, m_services);
+			return;
+
 		case DomainTransitionPhase::ENTER_WORKSPACE_CAMERA:
 		case DomainTransitionPhase::EXIT_WORKSPACE_CAMERA:
 			m_texMap2DWorkspace.render(frame, m_services);
 			return;
 
+
 		case DomainTransitionPhase::EXIT_CAMERA:
 
+			if (m_activeWorkspace) {
+				m_activeWorkspace->render(frame, m_services);
+			}
+			return;
+
+		case DomainTransitionPhase::EXIT_2D_CAMERA_X:
+		case DomainTransitionPhase::EXIT_2D_CAMERA_Z:
 			if (m_activeWorkspace) {
 				m_activeWorkspace->render(frame, m_services);
 			}
@@ -494,17 +507,30 @@ void Tesseract::processNavigationRequest() {
 
 		m_transitionDomain = request.domain;
 
+		if (request.domain == Domain::GRID_2D) {
+
+			m_domainTransitionPhase =
+				DomainTransitionPhase::EXIT_2D_CAMERA_X;
+
+			if (m_services.camera) {
+
+				// +1.40 -> 0
+				// Keep current GRID_2D depth.
+				m_services.camera->beginTransitionToCentered2D(kGrid3DCamTransStandard2D);
+			}
+
+			return;
+		}
+
 		// -----------------------------------------------------
 		// GRID_3D reverse ordering:
 		//
 		//     camera first
 		//     Tesseract second
 		// -----------------------------------------------------
-		if (request.domain == Domain::GRID_3D ||
-			request.domain == Domain::GRID_2D) {
+		if (request.domain == Domain::GRID_3D) {
 
-			m_domainTransitionPhase =
-				DomainTransitionPhase::EXIT_CAMERA;
+			m_domainTransitionPhase = DomainTransitionPhase::EXIT_CAMERA;
 
 			if (m_services.camera) {
 				m_services.camera->beginTransitionToMenu(kGrid3DCamTransDuration);
@@ -512,13 +538,8 @@ void Tesseract::processNavigationRequest() {
 			else {
 				// No camera service:
 				// skip directly to the visual phase.
-				m_domainTransitionPhase =
-					DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
-
-				if (request.domain == Domain::GRID_2D)
-					m_diagnosticIdle.beginGrid2DReturnTransition();
-				else
-					m_diagnosticIdle.beginGrid3DReturnTransition();
+				m_domainTransitionPhase = DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
+				m_diagnosticIdle.beginGrid3DReturnTransition();
 			}
 
 			return;
@@ -637,16 +658,21 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		// READY acknowledgement complete.
 		// Begin camera movement into Layer 1.
 		// -----------------------------------------------------
-		m_domainTransitionPhase =
-			DomainTransitionPhase::ENTER_CAMERA;
+		m_domainTransitionPhase = DomainTransitionPhase::ENTER_CAMERA;
 
 		m_transitionPhaseElapsed = 0.0f;
 		
 		if (m_services.camera) {
-			if (m_transitionDomain == Domain::GRID_2D)
-				m_services.camera->beginTransitionToStandard2D(kGrid3DCamTransDuration);
-			else
-				m_services.camera->beginTransitionToStandard3D(kGrid3DCamTransDuration);
+			if (m_transitionDomain == Domain::GRID_2D) {
+
+				m_domainTransitionPhase = DomainTransitionPhase::ENTER_2D_CAMERA_Z;
+
+				if (m_services.camera)
+					m_services.camera->beginTransitionToCentered2D(kGrid3DCamTransCenter2D);
+
+				return;
+			}
+			else m_services.camera->beginTransitionToStandard3D(kGrid3DCamTransDuration);
 		}
 		
 
@@ -702,6 +728,98 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		// Camera moves back first.
 		// SINGLE_PARTICLE remains structurally active.
 		// =========================================================
+
+	case DomainTransitionPhase::ENTER_2D_CAMERA_Z:
+		m_diagnosticIdle.update(frame, m_services);
+
+		if (m_services.camera) {
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+		}
+
+		// ---------------------------------------------
+		// Z zoom finished.
+		// Now perform only the final lateral offset.
+		// ---------------------------------------------
+		m_domainTransitionPhase = DomainTransitionPhase::ENTER_2D_CAMERA_X;
+
+		if (m_services.camera) {
+			m_services.camera->beginTransitionToStandard2D(kGrid3DCamTransStandard2D);
+		}
+
+		return;
+
+	case DomainTransitionPhase::ENTER_2D_CAMERA_X:
+
+		m_diagnosticIdle.update(frame, m_services);
+
+
+		if (m_services.camera) {
+
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+		}
+
+		// ---------------------------------------------
+		// GRID_2D visual + complete camera sequence done.
+		// NOW commit Layer 1.
+		// ---------------------------------------------
+		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
+		m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_2D);
+
+		if (m_services.camera)
+			m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
+
+		m_domainTransitionPhase = DomainTransitionPhase::NONE;
+		m_transitionDomain = Domain::NONE;
+
+		synchronizeActiveCartridge();
+
+		return;
+
+	case DomainTransitionPhase::EXIT_2D_CAMERA_X:
+
+		if (m_activeWorkspace &&m_activeWorkspace != &m_diagnosticIdle)
+			m_activeWorkspace->update(frame,m_services);
+		
+		if (m_services.camera) {
+
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+
+		}
+
+		// ---------------------------------------------
+		// Camera is centered again.
+		// Now retreat only along Z.
+		// ---------------------------------------------
+		m_domainTransitionPhase = DomainTransitionPhase::EXIT_2D_CAMERA_Z;
+
+		if (m_services.camera)
+			m_services.camera->beginTransitionToPreMenu2D(kGrid3DCamTransCenter2D);
+
+		return;
+
+	case DomainTransitionPhase::EXIT_2D_CAMERA_Z:
+
+		if (m_activeWorkspace &&m_activeWorkspace != &m_diagnosticIdle ) 
+			m_activeWorkspace->update(frame, m_services);
+
+		if (m_services.camera) {
+
+			m_services.camera->updatePoseTransition(frame.deltaTime);
+			if (m_services.camera->poseTransitionActive()) return;
+		}
+
+		// ---------------------------------------------
+		// Camera is now centered and backed away.
+		// ONLY NOW restore the diagnostic geometry.
+		// ---------------------------------------------
+		m_domainTransitionPhase = DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
+		m_diagnosticIdle.beginGrid2DReturnTransition();
+
+		return;
+
 	case DomainTransitionPhase::EXIT_CAMERA:
 
 		// Keep the currently active workspace alive while its
@@ -816,6 +934,8 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		return;
 
 	case DomainTransitionPhase::NONE:
+		return;
+
 	default:
 		return;
 	}
