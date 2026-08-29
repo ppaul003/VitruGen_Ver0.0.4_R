@@ -1,3 +1,4 @@
+#include "Camera.h"
 #include "renderer_Euclid.h"
 #include "TextureMap2DWorkspace.h"
 
@@ -56,14 +57,33 @@ void TextureMap2DWorkspace::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	(void)services;
+	// =====================================================
+	// TARGET LOAD CAMERA COMPOSITION
+	//
+	// When the XY plane begins retreating into the volume,
+	// center the 3D wire-cube view on X.
+	// =====================================================
+	if (m_targetCameraCenterPending) {
+
+		if (services.camera) 
+			services.camera->beginTransitionToCentered2D();
+		
+		m_targetCameraCenterPending = false;
+	}
+
+
 	if (!m_targetSweepActive) return;
 
-	m_planeProgress = std::max(
-		0.0f,
-		m_planeProgress - kTargetSweepSpeed * std::max(0.0f, frame.deltaTime));
+
+	m_planeProgress =
+		std::max(
+			0.0f,
+			m_planeProgress -
+			kTargetSweepSpeed * std::max(0.0f, frame.deltaTime)
+		);
 
 	if (m_planeProgress <= 0.0f) {
+
 		m_planeProgress = 0.0f;
 		m_targetSweepActive = false;
 	}
@@ -453,6 +473,8 @@ void TextureMap2DWorkspace::adjustLayer1Value(
 					step + count) % count);
 
 		invalidateTarget();
+		if (services.camera)
+			services.camera->beginTransitionToStandard2D();
 	}
 }
 
@@ -580,5 +602,6 @@ void TextureMap2DWorkspace::completeTargetLoad(
 	if (loaded) {
 		m_planeProgress = 1.0f;
 		m_targetSweepActive = true;
+		m_targetCameraCenterPending = true;
 	}
 }

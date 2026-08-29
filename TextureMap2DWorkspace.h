@@ -100,6 +100,7 @@ private:
 	// 1 = +Z/front plane only; 0 = -Z/rear plane plus full grid.
 	float m_planeProgress = 1.0f;
 	bool m_targetSweepActive = false;
+	bool m_targetCameraCenterPending = false;
 
 	HostRequest m_pendingHostRequest;
 };

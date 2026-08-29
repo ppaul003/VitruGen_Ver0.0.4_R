@@ -577,9 +577,12 @@ void Tesseract::processNavigationRequest() {
 		m_transitionDomain = request.domain;
 		m_domainTransitionPhase =
 			DomainTransitionPhase::EXIT_WORKSPACE_CAMERA;
+
 		if (m_services.camera)
-			m_services.camera->beginTransitionToStandard2D(
-				kGrid3DCamTransDuration);
+			m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
+
+		m_services.camera->beginTransitionToCentered2D(kGrid3DCamTransCenter2D);
+
 		return;
 
 
@@ -901,35 +904,26 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 	// GRID_2D LAYER 2 -> LAYER 1 CAMERA
 	// =========================================================
 	case DomainTransitionPhase::EXIT_WORKSPACE_CAMERA:
+
 		m_texMap2DWorkspace.update(frame, m_services);
+
 		if (m_services.camera) {
+
 			m_services.camera->updatePoseTransition(frame.deltaTime);
 			if (m_services.camera->poseTransitionActive()) return;
 			m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
 		}
 
+		// -----------------------------------------------------
+		// Return to Layer 1 of THE SAME workspace.
+		// -----------------------------------------------------
 		m_services.arbiter->setWorkspaceDomain(Domain::GRID_2D);
 		m_services.arbiter->setActiveWorkspace(Workspace::TEXTURE_MAP_2D);
-
 		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
-
-		if (m_transitionDomain == Domain::GRID_2D) {
-			m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_2D);
-
-			if (m_services.camera)
-				m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
-		}
-		else if (m_transitionDomain == Domain::GRID_3D) {
-			// GRID_3D now enters through its
-			// first domain cartridge just like GRID_2D.
-			m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_3D);
-
-			if (m_services.camera) 
-				m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_3D_ORBIT);
-		}
 
 		m_domainTransitionPhase = DomainTransitionPhase::NONE;
 		m_transitionDomain = Domain::NONE;
+
 		synchronizeActiveCartridge();
 		return;
 

@@ -21,7 +21,7 @@
 #include "SingleParticleWorkspace.h"
 #include "LinkedParticlesWorkspace.h"
 #include "Graph2DWorkspace.h"
-#include "TextureMap2Dworkspace.h"
+#include "TextureMap2DWorkspace.h"
 
 struct cudaGraphicsResource;
 
