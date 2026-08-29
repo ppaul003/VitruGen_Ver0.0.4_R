@@ -95,6 +95,43 @@ void CameraProcessor::applyViewCameraTransform() {
 	glRotatef(m_camera_rot_lag[1], 0.0, 1.0f, 0.0f);
 }
 
+void CameraProcessor::beginTransitionToPose(
+	float tx, float ty, float tz,
+	float rx, float ry, float rz,
+	float duration) {
+
+	m_bumpT = 0.0f;
+	for (int c = 0; c < 3; c++) {
+		m_poseStartTrans[c] = m_camera_trans_lag[c];
+		m_poseStartRot[c] = m_camera_rot_lag[c];
+		m_camera_trans[c] = m_poseStartTrans[c];
+		m_camera_rot[c] = m_poseStartRot[c];
+	}
+
+	m_poseTargetTrans[0] = tx;
+	m_poseTargetTrans[1] = ty;
+	m_poseTargetTrans[2] = tz;
+	m_poseTargetRot[0] = rx;
+	m_poseTargetRot[1] = ry;
+	m_poseTargetRot[2] = rz;
+	m_poseTransitionElapsed = 0.0f;
+
+	if (duration <= 0.0f) {
+		for (int c = 0; c < 3; c++) {
+			m_camera_trans[c] = m_poseTargetTrans[c];
+			m_camera_rot[c] = m_poseTargetRot[c];
+			m_camera_trans_lag[c] = m_poseTargetTrans[c];
+			m_camera_rot_lag[c] = m_poseTargetRot[c];
+		}
+		m_poseTransitionDuration = 0.0f;
+		m_poseTransitionActive = false;
+		return;
+	}
+
+	m_poseTransitionDuration = duration;
+	m_poseTransitionActive = true;
+}
+
 // =============================================================================
 // CAMERA POSE TRANSITION -> STANDARD GRID_3D
 // =============================================================================
@@ -157,6 +194,24 @@ void CameraProcessor::beginTransitionToStandard3D(float duration) {
 
 	m_poseTransitionDuration = duration;
 	m_poseTransitionActive = true;
+}
+
+void CameraProcessor::beginTransitionToStandard2D(float duration) {
+	// The complete 4x4 XY workplane fits comfortably at z=-5 under
+	// the host's existing 60-degree perspective projection.
+	beginTransitionToPose(
+		0.0f, 0.0f, -5.0f,
+		0.0f, 0.0f, 0.0f,
+		duration);
+}
+
+void CameraProcessor::beginTransitionToStandardObject(float duration) {
+	// GOLD's TextureMap target preview uses this close centered pose.
+	// It is intentionally generic rather than a SINGLE_PARTICLE mode.
+	beginTransitionToPose(
+		0.0f, 0.0f, -1.25f,
+		0.0f, 0.0f, 0.0f,
+		duration);
 }
 
 void CameraProcessor::beginTransitionToMenu(float duration) {
@@ -358,6 +413,24 @@ void CameraProcessor::focusStandard3DView() {
 	m_camera_rot[2] = 0.0f;
 }
 
+void CameraProcessor::focusStandard2DView() {
+	m_camera_trans[0] = 0.0f;
+	m_camera_trans[1] = 0.0f;
+	m_camera_trans[2] = -5.0f;
+	m_camera_rot[0] = 0.0f;
+	m_camera_rot[1] = 0.0f;
+	m_camera_rot[2] = 0.0f;
+}
+
+void CameraProcessor::focusStandardObjectView() {
+	m_camera_trans[0] = 0.0f;
+	m_camera_trans[1] = 0.0f;
+	m_camera_trans[2] = -1.25f;
+	m_camera_rot[0] = 0.0f;
+	m_camera_rot[1] = 0.0f;
+	m_camera_rot[2] = 0.0f;
+}
+
 void CameraProcessor::focusSingleParticleConfigView() {
 	// Zoomed-in SINGLE_PARTICLE configuration target.
 	// This makes particle 0 easier to see without requiring mouse-wheel zoom.
@@ -384,6 +457,7 @@ bool CameraProcessor::orbitEnabled() const {
 	// Everything else behaves like the old camera.
 	return !m_poseTransitionActive &&
 		m_behaviorMode != CAM_MENU_PREVIEW &&
+		m_behaviorMode != CAM_STANDARD_2D_LOCKED &&
 		!isWorkplaneLocked();
 }
 
@@ -487,6 +561,14 @@ void CameraProcessor::updateBehavior() {
 		setTargetSingleParticleClose();
 		break;
 
+	case CAM_STANDARD_2D_LOCKED:
+		setTargetStandard2D();
+		break;
+
+	case CAM_STANDARD_OBJECT_ORBIT:
+		setTargetStandardObject();
+		break;
+
 	case CAM_SINGLE_PARTICLE_WORKPLANE_LOCKED:
 		setTargetSingleParticleWorkplaneLocked();
 		break;
@@ -509,6 +591,18 @@ void CameraProcessor::updateBehavior() {
 void CameraProcessor::setTargetStandard3D() {
 	m_bumpT = 0.0f;
 	focusStandard3DView();
+}
+
+void CameraProcessor::setTargetStandard2D() {
+	m_bumpT = 0.0f;
+	focusStandard2DView();
+}
+
+void CameraProcessor::setTargetStandardObject() {
+	m_bumpT = 0.0f;
+	m_minZoomZ = -1.25f;
+	m_maxZoomZ = -8.0f;
+	focusStandardObjectView();
 }
 
 void CameraProcessor::setTargetSingleParticleClose() {

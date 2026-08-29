@@ -16,6 +16,7 @@
 #include "renderer_Euclid.h"
 
 #include "DiagnosticIdle.h"
+#include "Grid2DWorkspace.h"
 #include "ParticleSimWorkspace.h"
 #include "SingleParticleWorkspace.h"
 
@@ -29,9 +30,11 @@ public:
 		ENTER_DOMAIN_VISUAL,
 		ENTER_DOMAIN_READY,
 		ENTER_CAMERA,
+		ENTER_WORKSPACE_CAMERA,
 
 		EXIT_CAMERA,
-		EXIT_DOMAIN_VISUAL
+		EXIT_DOMAIN_VISUAL,
+		EXIT_WORKSPACE_CAMERA
 	};
 
 public:
@@ -50,6 +53,15 @@ public:
 	WorkspaceMenuPresentation menu() const;
 	bool handleMenuCommand(int command);
 	SingleParticleWorkspace::HostRequest takeSingleParticleHostRequest();
+	Grid2DWorkspace::HostRequest takeGrid2DHostRequest();
+	void replaceGrid2DOutputCatalog(
+		std::vector<vitru::StaticAssetCatalogEntry> catalog);
+	void completeGrid2DTargetLoad(
+		bool loaded,
+		bool ready,
+		vitru::AssetId assetId,
+		const std::string& displayName,
+		const std::string& message);
 	bool exportSingleParticleVolume(std::vector<float>& output) const;
 	bool restoreSingleParticleVolume(const std::vector<float>& input, const int3& size);
 	const int3& singleParticleVolumeSize() const;
@@ -63,6 +75,9 @@ public:
 	void processNavigationRequest();
 	void updateDomainTransition(const WorkspaceFrameContext& frame);
 	bool domainTransitionActive() const { return m_domainTransitionPhase != DomainTransitionPhase::NONE; }
+	bool workspaceInputLocked() const {
+		return domainTransitionActive() || m_grid2DWorkspace.automaticTransitionActive();
+	}
 
 private:
 	void synchronizeActiveCartridge();
@@ -74,6 +89,7 @@ private:
 	
 	WorkspaceServices m_services;
 	DiagnosticIdle m_diagnosticIdle;
+	Grid2DWorkspace m_grid2DWorkspace;
 
 	DomainTransitionPhase m_domainTransitionPhase =
 		DomainTransitionPhase::NONE;

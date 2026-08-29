@@ -287,6 +287,28 @@ void TheArbiter::requestReturnToGlobalShell(WorkspaceDomain domain) {
 		domain;
 }
 
+void TheArbiter::requestEnterWorkspaceConfiguration(
+	WorkspaceDomain domain,
+	WorkspaceId workspace) {
+
+	m_navigationRequest.type =
+		NavigationRequestType::ENTER_WORKSPACE_CONFIGURATION;
+
+	m_navigationRequest.domain = domain;
+	m_navigationRequest.workspace = workspace;
+}
+
+void TheArbiter::requestReturnToDomainSelection(
+	WorkspaceDomain domain,
+	WorkspaceId workspace) {
+
+	m_navigationRequest.type =
+		NavigationRequestType::RETURN_DOMAIN_SELECTION;
+
+	m_navigationRequest.domain = domain;
+	m_navigationRequest.workspace = workspace;
+}
+
 TheArbiter::NavigationRequest 
 TheArbiter::takeNavigationRequest() {
 

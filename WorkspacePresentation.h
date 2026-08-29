@@ -5,7 +5,6 @@
 #include <vector>
 
 enum class WorkspaceStatusTone {
-
 	Neutral = 0,
 	Ready,
 	Warning,
@@ -91,7 +90,12 @@ struct WorkspaceNodeTrackPresentation {
 struct WorkspacePresentation {
 	
 	bool panelVisible = false;
-	
+	bool statusBlink = false;
+	bool frameBlink = false;
+
+	WorkspaceStatusTone frameTone =
+		WorkspaceStatusTone::Neutral;
+
 	WorkspacePanelLayout panelLayout =
 		WorkspacePanelLayout::Main;
 
@@ -109,8 +113,7 @@ struct WorkspacePresentation {
 	WorkspaceStatusTone statusTone =
 		WorkspaceStatusTone::Neutral;
 
-	bool statusBlink = false;
-
+	
 	std::vector<WorkspacePanelSection> sections;
 
 	std::string footerLine1;

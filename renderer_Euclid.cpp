@@ -1382,6 +1382,99 @@ void EuclidRenderer::drawWireCube(
     glEnd();
     
     glLineWidth(1.0f);
+	glDisable(GL_BLEND);
+}
+
+void EuclidRenderer::drawUniformGridZRange(
+    const UniformGrid& grid,
+    float visibleMinZ,
+    float visibleMaxZ,
+    const GridDisplay& display) {
+
+    if (grid.dimensions.x <= 0 || grid.dimensions.y <= 0 ||
+        grid.dimensions.z <= 0) return;
+
+    const vec3 min = grid.origin;
+    const vec3 max = grid.origin + vec3(grid.dimensions) * grid.cellSize;
+    visibleMinZ = std::max(min.z, std::min(max.z, visibleMinZ));
+    visibleMaxZ = std::max(min.z, std::min(max.z, visibleMaxZ));
+    if (visibleMaxZ - visibleMinZ <= 0.00001f) return;
+
+    // Preserve the exact established full-grid path at the endpoint.
+    if (visibleMinZ <= min.z + 0.00001f &&
+        visibleMaxZ >= max.z - 0.00001f) {
+        drawUniformGrid(grid, display);
+        return;
+    }
+
+    if (display.boundary) {
+        const vec3 clippedCenter(
+            0.5f * (min.x + max.x),
+            0.5f * (min.y + max.y),
+            0.5f * (visibleMinZ + visibleMaxZ));
+        const vec3 clippedHalfExtent(
+            0.5f * (max.x - min.x),
+            0.5f * (max.y - min.y),
+            0.5f * (visibleMaxZ - visibleMinZ));
+        drawWireCube(clippedCenter, clippedHalfExtent);
+    }
+
+    // The positive axes are meaningful only while their origin remains
+    // inside the clipped interval.
+    if (display.axes && visibleMinZ <= 0.0f && visibleMaxZ >= 0.0f)
+        drawGridAxes(grid);
+
+    const int majorEvery = std::max(1, grid.majorEvery);
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const auto drawLattice = [&](bool majorOnly) {
+        for (int yIdx = 0; yIdx <= grid.dimensions.y; ++yIdx) {
+            if (majorOnly && (yIdx % majorEvery) != 0) continue;
+            const float y = min.y + static_cast<float>(yIdx) * grid.cellSize.y;
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; ++zIdx) {
+                if (majorOnly && (zIdx % majorEvery) != 0) continue;
+                const float z = min.z + static_cast<float>(zIdx) * grid.cellSize.z;
+                if (z < visibleMinZ || z > visibleMaxZ) continue;
+                glVertex3f(min.x, y, z); glVertex3f(max.x, y, z);
+            }
+        }
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; ++xIdx) {
+            if (majorOnly && (xIdx % majorEvery) != 0) continue;
+            const float x = min.x + static_cast<float>(xIdx) * grid.cellSize.x;
+            for (int zIdx = 0; zIdx <= grid.dimensions.z; ++zIdx) {
+                if (majorOnly && (zIdx % majorEvery) != 0) continue;
+                const float z = min.z + static_cast<float>(zIdx) * grid.cellSize.z;
+                if (z < visibleMinZ || z > visibleMaxZ) continue;
+                glVertex3f(x, min.y, z); glVertex3f(x, max.y, z);
+            }
+        }
+        for (int xIdx = 0; xIdx <= grid.dimensions.x; ++xIdx) {
+            if (majorOnly && (xIdx % majorEvery) != 0) continue;
+            const float x = min.x + static_cast<float>(xIdx) * grid.cellSize.x;
+            for (int yIdx = 0; yIdx <= grid.dimensions.y; ++yIdx) {
+                if (majorOnly && (yIdx % majorEvery) != 0) continue;
+                const float y = min.y + static_cast<float>(yIdx) * grid.cellSize.y;
+                glVertex3f(x, y, visibleMinZ);
+                glVertex3f(x, y, visibleMaxZ);
+            }
+        }
+    };
+
+    if (display.majorGrid) {
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.12f);
+        glBegin(GL_LINES); drawLattice(true); glEnd();
+    }
+    if (display.minorGrid) {
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.04f);
+        glBegin(GL_LINES); drawLattice(false); glEnd();
+    }
+
+    glLineWidth(1.0f);
     glDisable(GL_BLEND);
 }
 
@@ -5063,6 +5156,33 @@ void EuclidRenderer::drawParticleMeshOBJ(
 
     glPopClientAttrib();
     glPopAttrib();
+}
+
+void EuclidRenderer::drawStaticParticleTargetPreview(
+    float previewRadius,
+    bool showCollisionRadius) {
+
+    if (!hasParticleMeshOBJ() || previewRadius <= 0.0f) return;
+
+    ParticleProxy3D previewParticle;
+    previewParticle.position = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+    previewParticle.radius = previewRadius;
+
+    drawParticleMeshOBJ(
+        previewParticle,
+        make_float4(1.0f, 1.0f, 1.0f, 1.0f),
+        false,
+        true,
+        false);
+
+    if (showCollisionRadius) {
+        drawParticleWireSphere(
+            previewParticle,
+            make_float4(0.15f, 0.95f, 1.0f, 1.0f),
+            2.25f,
+            0.92f,
+            true);
+    }
 }
 
 void EuclidRenderer::drawVolumeBoundaryCage(

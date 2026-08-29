@@ -50,7 +50,7 @@ namespace {
 		if (!windowHandle) {
 
 			windowHandle =
-				FindWindowA(nullptr, "VitruGen Ver0.0.4");
+				FindWindowA(nullptr, "anaheim");
 		}
 
 		if (!windowHandle) {
@@ -644,7 +644,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 	//     no wheel zoom
 	//     no workspace mouse interaction
 	// ---------------------------------------------------------
-	if (m_arbiter.isGlobalShell() || m_tesseract.domainTransitionActive())
+	if (m_arbiter.isGlobalShell() || m_tesseract.workspaceInputLocked())
 		return;
 
 	const bool isWheel = button == 3 || button == 4;
@@ -710,8 +710,8 @@ void EuclidEngine::onMotion(int x, int y) {
 
 void EuclidEngine::onPassiveMotion(int x, int y) {
 	if (isAnyHostModalActive()) return;
-	if (m_arbiter.isGlobalShell() || 
-		m_tesseract.domainTransitionActive()) return;
+	if (m_arbiter.isGlobalShell() ||
+		m_tesseract.workspaceInputLocked()) return;
 
 	const TheArbiter::ArbiterResult result =
 		m_arbiter.routePointerMove(x, y);
@@ -820,6 +820,7 @@ void EuclidEngine::onIdle() {
 		buildWorkspaceFrameContext(deltaTime);
 
 	m_tesseract.update(frame);
+	consumeWorkspaceHostRequest();
 
 	computeFPS();
 	glutPostRedisplay();
@@ -1196,6 +1197,112 @@ bool EuclidEngine::isStaticParticleAssetModalActive() const {
 }
 
 void EuclidEngine::consumeWorkspaceHostRequest() {
+	using GridRequest = Grid2DWorkspace::HostRequestType;
+	const Grid2DWorkspace::HostRequest gridRequest =
+		m_tesseract.takeGrid2DHostRequest();
+
+	if (gridRequest.type == GridRequest::RefreshOutputCatalog) {
+		std::vector<vitru::StaticAssetCatalogEntry> catalog =
+			vitru::enumerateStaticParticleAssets(
+				m_inputsRoot,
+				m_outputRoot / "STATIC_PARTICLES");
+
+		catalog.erase(
+			std::remove_if(
+				catalog.begin(), catalog.end(),
+				[](const vitru::StaticAssetCatalogEntry& entry) {
+					return entry.source != "OUTPUT";
+				}),
+			catalog.end());
+
+		m_tesseract.replaceGrid2DOutputCatalog(std::move(catalog));
+	}
+	else if (gridRequest.type == GridRequest::LoadTarget) {
+		const std::string targetName = gridRequest.target.displayName;
+		vitru::StaticParticleAsset loadedAsset;
+		vitru::StaticAssetOperationReport report;
+
+		if (!gridRequest.target.valid ||
+			!vitru::loadStaticParticleBundle(
+				gridRequest.target.manifestPath,
+				loadedAsset,
+				report,
+				nullptr,
+				{})) {
+			m_tesseract.completeGrid2DTargetLoad(
+				false,
+				false,
+				vitru::INVALID_ASSET_ID,
+				targetName,
+				"TARGET LOAD FAILED: " + targetName +
+				" | CONFIGURATION LOCKED.");
+		}
+		else {
+			vitru::AssetId assetId = vitru::INVALID_ASSET_ID;
+			if (gridRequest.replaceAssetId != vitru::INVALID_ASSET_ID &&
+				m_assetRepository.findStaticParticle(gridRequest.replaceAssetId)) {
+				assetId = gridRequest.replaceAssetId;
+				if (!m_assetRepository.replaceStaticParticle(
+					assetId, std::move(loadedAsset))) {
+					assetId = vitru::INVALID_ASSET_ID;
+				}
+			}
+			else {
+				assetId = m_assetRepository.addStaticParticle(std::move(loadedAsset));
+			}
+
+			vitru::StaticParticleAsset* active =
+				m_assetRepository.findStaticParticle(assetId);
+
+			const bool installed =
+				active != nullptr &&
+				m_assetRepository.setActiveStaticParticle(assetId) &&
+				m_renderer != nullptr &&
+				m_renderer->loadParticleStaticAsset(*active);
+
+			if (!installed) {
+				m_tesseract.completeGrid2DTargetLoad(
+					false,
+					false,
+					vitru::INVALID_ASSET_ID,
+					targetName,
+					"TARGET LOAD FAILED: " + targetName +
+					" | CONFIGURATION LOCKED.");
+			}
+			else {
+				bool ready = !active->mesh.empty() &&
+					active->mesh.uvs.size() == active->mesh.positions.size() &&
+					!active->materials.empty();
+
+				std::size_t materialIndex = 0;
+				if (ready && !active->submeshes.empty()) {
+					const std::size_t candidate = static_cast<std::size_t>(
+						active->submeshes.front().materialIndex);
+					if (candidate < active->materials.size()) materialIndex = candidate;
+				}
+
+				if (ready) {
+					const std::string& textureId =
+						active->materials[materialIndex].baseColorTextureId;
+					const vitru::TextureResource* texture =
+						textureId.empty() ? nullptr : active->findTexture(textureId);
+					ready = texture != nullptr && texture->valid;
+				}
+
+				m_tesseract.completeGrid2DTargetLoad(
+					true,
+					ready,
+					assetId,
+					active->name.empty() ? targetName : active->name,
+					ready
+					? "TARGET LOADED: " + targetName +
+						" | TEXTURE_MAP_2D CONFIGURATION READY."
+					: "TARGET LOADED: " + targetName +
+						" | UV/TEXTURE PREREQUISITES NOT READY; CONFIGURATION LOCKED.");
+			}
+		}
+	}
+
 	using Request = SingleParticleWorkspace::HostRequest;
 	switch (m_tesseract.takeSingleParticleHostRequest()) {
 	case Request::LoadStaticParticle: openStaticParticleLoadPanel(); break;

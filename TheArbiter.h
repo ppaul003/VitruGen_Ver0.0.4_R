@@ -29,7 +29,10 @@ public:
 		NONE = 0,
 
 		ENTER_DOMAIN,
-		RETURN_GLOBAL_SHELL
+		RETURN_GLOBAL_SHELL,
+
+		ENTER_WORKSPACE_CONFIGURATION,
+		RETURN_DOMAIN_SELECTION
 	};
 
 	enum class WorkspaceId {
@@ -81,6 +84,9 @@ public:
 
 		WorkspaceDomain domain =
 			WorkspaceDomain::NONE;
+
+		WorkspaceId workspace =
+			WorkspaceId::NONE;
 
 	};
 
@@ -158,6 +164,12 @@ public:
 
 	void requestEnterDomain(WorkspaceDomain domain);
 	void requestReturnToGlobalShell(WorkspaceDomain domain);
+	void requestEnterWorkspaceConfiguration(
+		WorkspaceDomain domain,
+		WorkspaceId workspace);
+	void requestReturnToDomainSelection(
+		WorkspaceDomain domain,
+		WorkspaceId workspace);
 	bool hasNavigationRequest() const { return m_navigationRequest.type != NavigationRequestType::NONE; }
 	NavigationRequest takeNavigationRequest();
 

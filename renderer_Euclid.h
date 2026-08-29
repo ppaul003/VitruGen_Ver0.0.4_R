@@ -191,6 +191,13 @@ public:
 		const GridDisplay& display
 	);
 
+	void drawUniformGridZRange(
+		const UniformGrid& grid,
+		float visibleMinZ,
+		float visibleMaxZ,
+		const GridDisplay& display
+	);
+
 	void drawWireCube(
 		const glm::vec3& center,
 		const glm::vec3& halfExtent
@@ -384,6 +391,11 @@ public:
 		bool selected,
 		bool fillMeshBounds,
 		bool wireframe
+	);
+
+	void drawStaticParticleTargetPreview(
+		float previewRadius,
+		bool showCollisionRadius
 	);
 
 protected:

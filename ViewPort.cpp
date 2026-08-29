@@ -141,6 +141,8 @@ float ViewPort::panelOffsetX() const {
 // =============================================================================
 void ViewPort::drawWorkspaceFrame(
 	float alpha,
+	WorkspaceStatusTone tone,
+	bool blink,
 	const char* label) {
 
 	const float margin = 24.0f;
@@ -166,17 +168,95 @@ void ViewPort::drawWorkspaceFrame(
 		GL_ONE_MINUS_SRC_ALPHA
 	);
 
-	glLineWidth(1.0f);
-	glColor4f(0.85f, 0.95f, 1.0f, alpha);
+	// =========================================================
+	// FRAME PRESENTATION
+	// =========================================================
+	float frameAlpha = alpha;
 
+	float r = 0.85f;
+	float g = 0.95f;
+	float b = 1.00f;
+
+	switch (tone) {
+
+	// -----------------------------------------------------
+	// AUTO transition
+	// -----------------------------------------------------
+	case WorkspaceStatusTone::Transition:
+
+		r = 1.00f;
+		g = 0.65f;
+		b = 0.15f;
+
+		// Stronger than the normal passive frame.
+		frameAlpha = 0.95f;
+
+		break;
+
+
+	// -----------------------------------------------------
+	// Setup complete / camera handoff
+	// -----------------------------------------------------
+	case WorkspaceStatusTone::Ready:
+
+		r = 0.45f;
+		g = 0.95f;
+		b = 1.00f;
+
+		frameAlpha = 0.85f;
+
+		break;
+
+
+	// -----------------------------------------------------
+	// Normal VitruGen workspace frame.
+	// -----------------------------------------------------
+	case WorkspaceStatusTone::Neutral:
+	default:
+
+		// Preserve current appearance exactly.
+		r = 0.85f;
+		g = 0.95f;
+		b = 1.00f;
+
+		frameAlpha = alpha;
+
+		break;
+	}
+
+
+	// =========================================================
+	// BLINK
+	//
+	// Same 0.50 second rhythm as the AUTO status line.
+	// =========================================================
+	if (blink) {
+
+		using Clock = chrono::steady_clock;
+
+		const float seconds =
+			chrono::duration<float>(Clock::now().time_since_epoch()).count();
+
+		const bool bright =
+			std::fmod(seconds, 0.50f) < 0.25f;
+
+		frameAlpha *= bright
+			? 1.0f
+			: 0.20f;
+	}
+
+	glLineWidth(1.0f);
+	glColor4f(r, g, b, frameAlpha);
 	glBegin(GL_LINE_LOOP);
 
 	glVertex2f(x0, y0);
 	glVertex2f(x1, y0);
+
 	glVertex2f(x1, y1);
 	glVertex2f(x0, y1);
-	
+
 	glEnd();
+
 
 	if (label) {
 
@@ -732,7 +812,12 @@ void ViewPort::drawOverlay(
 	updateSubLayerPanelAnimation(presentation.panelVisible && subLayerPanel);
 
 	beginOverlay2D();
-	drawWorkspaceFrame(0.30f, nullptr);
+	drawWorkspaceFrame(
+		0.30f,
+		presentation.frameTone,
+		presentation.frameBlink,
+		nullptr
+	);
 
 	// ---------------------------------------------------------
 	// Layer-3 runtime HUD.

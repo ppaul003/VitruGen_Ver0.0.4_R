@@ -127,6 +127,62 @@ void DiagnosticIdle::update(
 		}
 
 		break;
+
+	// -----------------------------------------------------
+	// GRID_2D ENTER: preserve forward CCW motion and capture
+	// the strictly next front-facing pass.
+	// -----------------------------------------------------
+	case VisualTransitionState::Grid2D_OrientToFront:
+		m_previewRotationDegrees += kTransitionRotationSpeed * dt;
+		m_sliceTravel += kTransitionSliceSpeed * dt;
+		if (m_previewRotationDegrees >= m_targetRotationDegrees) {
+			m_previewRotationDegrees = m_targetRotationDegrees;
+
+			// XY occupies [cycle*3, cycle*3+1].  Wait for the
+			// strictly next start at its -Z face.
+			float target = floor(m_sliceTravel / 3.0f) * 3.0f;
+			if (target <= m_sliceTravel) target += 3.0f;
+			m_targetSliceTravel = target;
+			m_visualTransition =
+				VisualTransitionState::Grid2D_WaitForXYStart;
+		}
+		break;
+
+	case VisualTransitionState::Grid2D_WaitForXYStart:
+		m_sliceTravel += kTransitionSliceSpeed * dt;
+		if (m_sliceTravel >= m_targetSliceTravel) {
+			m_sliceTravel = m_targetSliceTravel;
+			m_grid2DPlaneProgress = 0.0f;
+			m_visualTransition =
+				VisualTransitionState::Grid2D_SweepToFront;
+		}
+		break;
+
+	case VisualTransitionState::Grid2D_SweepToFront:
+		m_grid2DPlaneProgress = std::min(
+			1.0f,
+			m_grid2DPlaneProgress + kTransitionSliceSpeed * dt);
+		m_sliceTravel = m_targetSliceTravel + m_grid2DPlaneProgress;
+		if (m_grid2DPlaneProgress >= 1.0f) {
+			m_visualTransition = VisualTransitionState::Grid2D_HoldFront;
+			m_grid2DEnterComplete = true;
+		}
+		break;
+
+	case VisualTransitionState::Grid2D_HoldFront:
+		break;
+
+	case VisualTransitionState::Grid2D_ReturnSweep:
+		m_grid2DPlaneProgress = std::max(
+			0.0f,
+			m_grid2DPlaneProgress - kTransitionSliceSpeed * dt);
+		m_sliceTravel = m_targetSliceTravel + m_grid2DPlaneProgress;
+		if (m_grid2DPlaneProgress <= 0.0f) {
+			m_sliceTravel = m_targetSliceTravel;
+			m_visualTransition = VisualTransitionState::Idle;
+			m_grid2DReturnComplete = true;
+		}
+		break;
 	}
 }
 
@@ -172,6 +228,33 @@ void DiagnosticIdle::render(
 		fmod(m_previewRotationDegrees, 360.0f);
 
 	glRotatef(visualRotation, 0.0f, 1.0f, 0.0f);
+
+	const bool grid2DPlanarVisual =
+		m_visualTransition == VisualTransitionState::Grid2D_SweepToFront ||
+		m_visualTransition == VisualTransitionState::Grid2D_HoldFront ||
+		m_visualTransition == VisualTransitionState::Grid2D_ReturnSweep;
+
+	if (grid2DPlanarVisual) {
+		const float planePosition =
+			grid.origin.z + boxSize * m_grid2DPlaneProgress;
+
+		// The visible interval shrinks from the moving plane toward
+		// +Z during entry and grows through the same primitive on return.
+		renderer.drawUniformGridZRange(
+			grid,
+			planePosition,
+			grid.origin.z + boxSize,
+			display);
+
+		renderer.drawGridPlane(
+			grid,
+			EuclidRenderer::GridPlane::PLANE_XY,
+			planePosition,
+			false);
+
+		glPopMatrix();
+		return;
+	}
 
 	// UniformGrid
 	renderer.drawUniformGrid(grid, display);
@@ -476,6 +559,27 @@ void DiagnosticIdle::beginGrid3DReturnTransition() {
 	m_visualTransition =
 		VisualTransitionState::
 		Grid3D_ReleaseSlice;
+}
+
+void DiagnosticIdle::beginGrid2DEnterTransition() {
+	m_grid2DEnterComplete = false;
+	m_grid2DReturnComplete = false;
+	m_grid2DPlaneProgress = 0.0f;
+
+	const float revolution = floor(m_previewRotationDegrees / 360.0f);
+	m_targetRotationDegrees = (revolution + 1.0f) * 360.0f;
+	m_visualTransition = VisualTransitionState::Grid2D_OrientToFront;
+}
+
+void DiagnosticIdle::beginGrid2DReturnTransition() {
+	m_grid2DReturnComplete = false;
+	m_grid2DPlaneProgress = 1.0f;
+
+	// Reconstruct from the same complete XY pass that was captured
+	// on entry, ending at -Z before ordinary idle cycling resumes.
+	m_targetSliceTravel = floor(m_sliceTravel / 3.0f) * 3.0f;
+	m_sliceTravel = m_targetSliceTravel + 1.0f;
+	m_visualTransition = VisualTransitionState::Grid2D_ReturnSweep;
 }
 
 const char* DiagnosticIdle::selectedEnvironmentName() const {

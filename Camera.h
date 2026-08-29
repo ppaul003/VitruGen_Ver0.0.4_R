@@ -10,6 +10,8 @@ public:
 		CAM_MENU_PREVIEW = 0,
 
 		CAM_STANDARD_3D_ORBIT,
+		CAM_STANDARD_2D_LOCKED,
+		CAM_STANDARD_OBJECT_ORBIT,
 
 		// SINGLE_PARTICLE OpenGL / particle-anchor workspace.
 		CAM_SINGLE_PARTICLE_ORBIT_CLOSE,
@@ -48,6 +50,8 @@ public:
 
 	void focus3DFromMenu(float previewRotationDegrees);
 	void focusStandard3DView();
+	void focusStandard2DView();
+	void focusStandardObjectView();
 	void focusSingleParticleConfigView();
 
 	void setBehaviorMode(CameraBehaviorMode mode);
@@ -60,6 +64,8 @@ public:
 
 	void updateBehavior();
 	void setTargetStandard3D();
+	void setTargetStandard2D();
+	void setTargetStandardObject();
 	void setTargetSingleParticleClose();
 	void setTargetSingleParticleWorkplaneLocked();
 	void setTargetVolumeRender();
@@ -89,11 +95,18 @@ public:
 	) const;
 
 	void beginTransitionToStandard3D(float duration = 1.25f);
+	void beginTransitionToStandard2D(float duration = 1.25f);
+	void beginTransitionToStandardObject(float duration = 1.25f);
 	void beginTransitionToMenu(float duration = 1.25f);
 	void updatePoseTransition(float deltaTime);
 	bool poseTransitionActive() const { return m_poseTransitionActive; }
 
 private:
+	void beginTransitionToPose(
+		float tx, float ty, float tz,
+		float rx, float ry, float rz,
+		float duration);
+
 	// --- SINGLE_PARTICLE local pocket camera distances ---
 	static constexpr float kPocketZoomInertia = 0.10f;
 

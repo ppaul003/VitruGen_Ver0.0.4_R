@@ -16,7 +16,13 @@ public:
 		Grid3D_CaptureSlice,
 		Grid3D_HoldCenter,
 
-		Grid3D_ReleaseSlice
+		Grid3D_ReleaseSlice,
+
+		Grid2D_OrientToFront,
+		Grid2D_WaitForXYStart,
+		Grid2D_SweepToFront,
+		Grid2D_HoldFront,
+		Grid2D_ReturnSweep
 	};
 
 public:
@@ -45,9 +51,13 @@ public:
 
 	void beginGrid3DEnterTransition();
 	void beginGrid3DReturnTransition();
+	void beginGrid2DEnterTransition();
+	void beginGrid2DReturnTransition();
 
 	bool grid3DEnterVisualComplete() const { return m_grid3DEnterComplete; }
 	bool grid3DReturnVisualComplete() const { return m_grid3DReturnComplete; }
+	bool grid2DEnterVisualComplete() const { return m_grid2DEnterComplete; }
+	bool grid2DReturnVisualComplete() const { return m_grid2DReturnComplete; }
 
 	float previewRotationDegrees() const { return m_previewRotationDegrees; }
 
@@ -93,6 +103,8 @@ private:
 
 	bool m_grid3DEnterComplete = false;
 	bool m_grid3DReturnComplete = false;
+	bool m_grid2DEnterComplete = false;
+	bool m_grid2DReturnComplete = false;
 
 	int m_requestedSimBoxSize = 4;
 	int m_globalIlluminationDeg = 45;
@@ -105,6 +117,7 @@ private:
 
 	float m_targetRotationDegrees = 0.0f;
 	float m_targetSliceTravel = 0.0f;
+	float m_grid2DPlaneProgress = 0.0f;
 
 };
 

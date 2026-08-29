@@ -121,6 +121,8 @@ private:
 	// ---------------------------------------------------------
 	void drawWorkspaceFrame(
 		float alpha,
+		WorkspaceStatusTone tone = WorkspaceStatusTone::Neutral,
+		bool blink = false,
 		const char* label = nullptr
 	);
 

@@ -88,6 +88,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DiagnosticIdle.cpp" />
     <ClCompile Include="EuclidEngine.cpp" />
+    <ClCompile Include="Grid2DWorkspace.cpp" />
     <ClCompile Include="JsonValue.cpp" />
     <ClCompile Include="marchingCubes.cpp" />
     <ClCompile Include="MeshGeometry.cpp" />
@@ -122,6 +123,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DiagnosticIdle.h" />
     <ClInclude Include="EuclidEngine.h" />
+    <ClInclude Include="Grid2DWorkspace.h" />
     <ClInclude Include="Interactions.h" />
     <ClInclude Include="IWorkspace.h" />
     <ClInclude Include="JsonValue.h" />
@@ -154,7 +156,7 @@
     <ClInclude Include="WorkspacePresentation.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="VitruGen_Ver004.ico" />
+    <Image Include="anaheim.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
