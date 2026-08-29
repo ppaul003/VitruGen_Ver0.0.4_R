@@ -541,11 +541,15 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 
 		switch (presentation.statusTone) {
 		case WorkspaceStatusTone::Ready:
-			glColor4f(0.45f, 1.0f, 0.65f, m_panelSlide);
+			glColor4f(0.45f, 1.00f, 0.65f, m_panelSlide);
+			break;
+
+		case WorkspaceStatusTone::Caution:
+			glColor4f(1.00f, 0.65f, 0.15f, m_panelSlide);
 			break;
 
 		case WorkspaceStatusTone::Warning:
-			glColor4f(1.0f, 0.45f, 0.45f, m_panelSlide);
+			glColor4f(1.00f, 0.45f, 0.45f, m_panelSlide);
 			break;
 
 		case WorkspaceStatusTone::Transition:
@@ -558,12 +562,38 @@ void ViewPort::drawPresentationSections(const WorkspacePresentation& presentatio
 			break;
 		}
 
-		drawText2D(
-			panelX(rowX),
-			y,
-			presentation.statusLine.c_str(),
-			GLUT_BITMAP_HELVETICA_18
-		);
+		const string& status = presentation.statusLine;
+
+		size_t lineStart = 0;
+		float statusY = y;
+
+		while (lineStart <= status.size()) {
+
+			const size_t lineEnd =
+				status.find('\n', lineStart);
+
+			const string line =
+				status.substr(
+					lineStart,
+					lineEnd == string::npos
+					? string::npos
+					: lineEnd - lineStart
+				);
+
+			drawText2D(
+				panelX(rowX),
+				statusY,
+				line.c_str(),
+				GLUT_BITMAP_HELVETICA_18
+			);
+
+			if (lineEnd == std::string::npos)
+				break;
+
+			lineStart = lineEnd + 1;
+
+			statusY += m_rowSpacing;
+		}
 	}
 }
 

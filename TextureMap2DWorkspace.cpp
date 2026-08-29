@@ -213,10 +213,10 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer1Presentation() const {
 	const vitru::StaticAssetCatalogEntry* target =
 		selectedTarget();
 
-	std::string targetName =
+	string targetName =
 		"NO OUTPUT ASSETS";
 
-	std::string badge =
+	string badge =
 		m_catalogReady
 		? "NO OUTPUT ASSETS"
 		: "CATALOG PENDING";
@@ -224,14 +224,9 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer1Presentation() const {
 
 	if (target) {
 
-		targetName =
-			target->displayName;
+		targetName = target->displayName;
 
-		if (
-			m_targetLoaded &&
-			targetName ==
-			m_loadedTargetName
-			) {
+		if (m_targetLoaded && targetName == m_loadedTargetName) {
 
 			badge =
 				m_targetReady
@@ -289,55 +284,50 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer1Presentation() const {
 	// STATUS
 	// =========================================================
 
-	if (!m_statusMessage.empty()) {
+	if (m_targetLoaded && m_targetReady) {
 
 		p.statusLine =
-			m_statusMessage;
+			"TARGET LOADED: " +
+			m_loadedTargetName +
+			"\n"
+			"TEXTURE_MAP_2D CONFIGURATION READY.";
 
-		p.statusTone =
-			m_targetReady
-			? WorkspaceStatusTone::Ready
-			: WorkspaceStatusTone::Warning;
+		p.statusTone = WorkspaceStatusTone::Ready;
+	}
+	else if (!m_statusMessage.empty()) {
+		p.statusLine = m_statusMessage;
+		p.statusTone = WorkspaceStatusTone::Warning;
 	}
 	else if (!m_catalogReady) {
-
-		p.statusLine =
-			"OUTPUT CATALOG IS NOT INITIALIZED.";
-
-		p.statusTone =
-			WorkspaceStatusTone::Warning;
+		p.statusLine = "OUTPUT CATALOG IS NOT INITIALIZED.";
+		p.statusTone =WorkspaceStatusTone::Warning;
 	}
 	else if (m_outputCatalog.empty()) {
 
-		p.statusLine =
-			"NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
-
-		p.statusTone =
-			WorkspaceStatusTone::Warning;
+		p.statusLine = "NO OUTPUT STATIC PARTICLE ASSETS FOUND.";
+		p.statusTone = WorkspaceStatusTone::Warning;
 	}
 	else if (target) {
 
-		// -----------------------------------------------------
-		// Keep this deliberately short so the status remains
-		// inside the Layer-1 side panel.
-		// -----------------------------------------------------
 		if (target->valid) {
 
 			p.statusLine =
-				"TARGET SELECTED: " +
-				target->displayName;
+				"SELECTED TARGET: " +
+				target->displayName +
+				"\n"
+				"LOAD TARGET ASSET WITH ROW [3].";
 
-			p.statusTone =
-				WorkspaceStatusTone::Neutral;
+			p.statusTone = WorkspaceStatusTone::Caution;
 		}
 		else {
 
 			p.statusLine =
-				"TARGET INVALID: " +
-				target->displayName;
+				"SELECTED TARGET INVALID: " +
+				target->displayName +
+				"\n"
+				"CONFIGURATION LOCKED.";
 
-			p.statusTone =
-				WorkspaceStatusTone::Warning;
+			p.statusTone = WorkspaceStatusTone::Warning;
 		}
 	}
 
@@ -384,12 +374,12 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer2Presentation() const {
 
 	WorkspacePanelSection config;
 	char radius[32];
-	std::snprintf(radius, sizeof(radius), "%.4f", m_previewParticleRadius);
+	snprintf(radius, sizeof(radius), "%.4f", m_previewParticleRadius);
 	config.rows.push_back(makeRow(
 		"[1]: PREVIEW PARTICLE RADIUS", radius,
 		m_layer2Item == Layer2Item::PreviewRadius));
-	const std::string grid = std::to_string(m_pixelGridDivisions) + " x " +
-		std::to_string(m_pixelGridDivisions);
+	const string grid = std::to_string(m_pixelGridDivisions) + " x " +
+		to_string(m_pixelGridDivisions);
 	config.rows.push_back(makeRow(
 		"[2]: PIXEL GRID", grid,
 		m_layer2Item == Layer2Item::PixelGrid));
@@ -399,7 +389,7 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer2Presentation() const {
 	p.sections.push_back(config);
 
 	if (!m_statusMessage.empty() &&
-		m_statusMessage.find("DEFERRED") != std::string::npos) {
+		m_statusMessage.find("DEFERRED") != string::npos) {
 		p.statusLine = m_statusMessage;
 		p.statusTone = WorkspaceStatusTone::Warning;
 	}
@@ -451,7 +441,7 @@ void TextureMap2DWorkspace::adjustLayer1Value(
 			: 1;
 
 		m_selectedTargetIndex =
-			static_cast<std::size_t>(
+			static_cast<size_t>(
 				(static_cast<int>(m_selectedTargetIndex) + 
 					step + count) % count);
 
@@ -498,7 +488,10 @@ void TextureMap2DWorkspace::activateLayer1(WorkspaceServices& services) {
     // =====================================================
 	if (m_layer1Item == Layer1Item::Configure) {
 		if (!m_targetLoaded || !m_targetReady || m_targetSweepActive) {
-			m_statusMessage = "TARGET CONFIGURATION LOCKED: LOAD A READY TARGET FIRST.";
+			m_statusMessage = 
+				"TARGET CONFIGURATION LOCKED: "
+				"\n"
+				"LOAD A READY TARGET FIRST.";
 			return;
 		}
 		if (services.arbiter) {
@@ -516,17 +509,17 @@ void TextureMap2DWorkspace::adjustLayer2Value(int direction) {
 			0.0039f, 0.0046f, 0.0054f, 0.0061f, 0.0068f, 0.0076f,
 			0.0083f, 0.0091f, 0.0098f, 0.0105f, 0.0113f, 0.0120f,
 			0.0127f, 0.0135f, 0.0142f, 0.0149f, 0.0156f };
-		std::size_t index = 0;
-		for (std::size_t i = 1; i < presets.size(); ++i)
-			if (std::fabs(presets[i] - m_previewParticleRadius) <
-				std::fabs(presets[index] - m_previewParticleRadius)) index = i;
+		size_t index = 0;
+		for (size_t i = 1; i < presets.size(); ++i)
+			if (fabs(presets[i] - m_previewParticleRadius) <
+				fabs(presets[index] - m_previewParticleRadius)) index = i;
 		if (direction < 0 && index > 0) --index;
 		if (direction > 0 && index + 1 < presets.size()) ++index;
 		m_previewParticleRadius = presets[index];
 	}
 	else if (m_layer2Item == Layer2Item::PixelGrid) {
-		static constexpr std::array<std::uint32_t, 3> presets{ 32u, 64u, 128u };
-		std::size_t index = m_pixelGridDivisions == 32u ? 0u
+		static constexpr array<uint32_t, 3> presets{ 32u, 64u, 128u };
+		size_t index = m_pixelGridDivisions == 32u ? 0u
 			: m_pixelGridDivisions == 128u ? 2u : 1u;
 		if (direction < 0 && index > 0) --index;
 		if (direction > 0 && index + 1 < presets.size()) ++index;
@@ -568,13 +561,13 @@ void TextureMap2DWorkspace::completeTargetLoad(
 	bool loaded,
 	bool ready,
 	vitru::AssetId assetId,
-	const std::string& displayName,
-	const std::string& message) {
+	const string& displayName,
+	const string& message) {
 
 	m_targetLoaded = loaded;
 	m_targetReady = loaded && ready;
 	m_targetAssetId = loaded ? assetId : vitru::INVALID_ASSET_ID;
-	m_loadedTargetName = loaded ? displayName : std::string{};
+	m_loadedTargetName = loaded ? displayName : string{};
 	m_statusMessage = message;
 
 	if (loaded) {
