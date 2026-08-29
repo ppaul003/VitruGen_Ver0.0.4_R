@@ -17,7 +17,9 @@
 
 #include "DiagnosticIdle.h"
 #include "ParticleSimWorkspace.h"
+#include "Graph3DWorkspace.h"
 #include "SingleParticleWorkspace.h"
+#include "LinkedParticlesWorkspace.h"
 #include "Graph2DWorkspace.h"
 #include "TextureMap2Dworkspace.h"
 
@@ -96,7 +98,9 @@ private:
 	//Grid2DWorkspace m_grid2DWorkspace;
 
 	ParticleSimWorkspace m_particleSimWorkspace; // OFFLINE
+	Graph3DWorkspace m_graph3DWorkspace; // OFFLINE
 	SingleParticleWorkspace m_singleParticleWorkspace;
+	LinkedParticlesWorkspace m_linkedParticlesWorkspace;
 	Graph2DWorkspace m_graph2DWorkspace; // OFFLINE
 	TextureMap2DWorkspace m_texMap2DWorkspace;
 

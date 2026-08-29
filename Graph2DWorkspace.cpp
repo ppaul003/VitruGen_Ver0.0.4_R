@@ -7,6 +7,7 @@
 #include <cstdio>
 
 using namespace std;
+
 namespace {
     WorkspacePanelRow makeRow(
         const string& label,
@@ -102,16 +103,13 @@ WorkspacePresentation Graph2DWorkspace::buildLayer1Presentation() const {
     WorkspacePresentation p;
     p.panelVisible = true;
 
-    p.workspaceName =
-        "LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
-
-    p.layerLabel =
-        "DOMAIN: GRID_2D";
+    p.workspaceName = "LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
+    p.layerLabel = "MODE: GRAPH_2D";
 
     WorkspacePanelSection section;
     section.rows.push_back(
         makeRow(
-            "[1] GRID_2D SELECTION",
+            "[1]: GRID_2D SELECTION",
             "GRAPH_2D",
             true
         )

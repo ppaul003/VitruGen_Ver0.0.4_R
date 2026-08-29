@@ -1,24 +1,27 @@
-#ifndef VITRUGEN_GRAPH_2D_WORKSPACE_H
-#define VITRUGEN_GRAPH_2D_WORKSPACE_H
+#ifndef VITRUGEN_GRAPH_3D_WORKSPACE_H
+#define VITRUGEN_GRAPH_3D_WORKSPACE_H
 
 #include "TheArbiter.h"
 
+#include <GL/glew.h>
+#include <memory>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <vector_types.h>
 
 #include "IWorkspace.h"
 
-class Graph2DWorkspace : public IWorkspace {
+class Graph3DWorkspace : public IWorkspace {
 public:
-    enum class Layer1Item {
-        Workspace = 0,
-        Count
-    };
+	enum class Layer1Item {
+		Workspace = 0,
+		Count
+	};
 
 public:
-    Graph2DWorkspace();
-    ~Graph2DWorkspace() override;
+	Graph3DWorkspace();
+	~Graph3DWorkspace() override;
 
     bool initialize(WorkspaceServices& services) override;
     void enter(WorkspaceServices& services) override;

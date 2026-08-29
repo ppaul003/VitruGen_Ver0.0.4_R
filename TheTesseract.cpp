@@ -63,10 +63,27 @@ bool Tesseract::initialize(WorkspaceServices services) {
 		return false;
 	}
 
+	if (!m_graph3DWorkspace.initialize(m_services)) {
+
+		printf(
+			"[Tesseract] ERROR: "
+			"Graph3DWorkspace initialization failed.\n"
+		);
+
+		return false;
+	}
+
 	if (!m_singleParticleWorkspace.initialize(m_services)) {
 		printf(
 			"[Tesseract] ERROR: "
 			"SingleParticleWorkspace initialization failed.\n");
+		return false;
+	}
+
+	if (!m_linkedParticlesWorkspace.initialize(m_services)) {
+		printf(
+			"[Tesseract] ERROR: "
+			"LinkedParticlesWorkspace initialization failed.\n");
 		return false;
 	}
 	// ---------------------------------------------------------
@@ -94,7 +111,7 @@ bool Tesseract::initialize(WorkspaceServices services) {
 void Tesseract::shutdown() {
 	if (m_activeWorkspace) m_activeWorkspace->exit(m_services);
 	m_activeWorkspace = nullptr;
-	
+
 	m_singleParticleWorkspace.shutdown();
 }
 
@@ -232,10 +249,10 @@ Tesseract::presentation() const {
 			return p;
 		}
 		case DomainTransitionPhase::ENTER_CAMERA:
-			return m_texMap2DWorkspace.buildLayer1TransitionPresentation();
+			return m_graph2DWorkspace.buildLayer1TransitionPresentation();
 
 		case DomainTransitionPhase::ENTER_WORKSPACE_CAMERA: {
-			WorkspacePresentation p = m_texMap2DWorkspace.buildPresentation();
+			WorkspacePresentation p = m_graph2DWorkspace.buildPresentation();
 			p.statusLine = "AUTO: Transitioning To TEXTURE_MAP_2D TARGET CONFIGURATION...";
 			p.statusTone = WorkspaceStatusTone::Transition;
 			p.statusBlink = true;
@@ -309,7 +326,7 @@ Tesseract::presentation() const {
 
 		case DomainTransitionPhase::ENTER_CAMERA: {
 			WorkspacePresentation presentation =
-				m_singleParticleWorkspace.buildLayer1TransitionPresentation();
+				m_graph3DWorkspace.buildLayer1TransitionPresentation();
 
 			presentation.frameTone = WorkspaceStatusTone::Ready;
 			presentation.frameBlink = false;
@@ -752,8 +769,7 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		if (m_services.camera) {
 			m_services.camera->updatePoseTransition(frame.deltaTime);
 			if (m_services.camera->poseTransitionActive()) return;
-			m_services.camera->setBehaviorMode(
-				CameraProcessor::CAM_STANDARD_OBJECT_ORBIT);
+			m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_OBJECT_ORBIT);
 		}
 		m_services.arbiter->setWorkspaceDomain(Domain::GRID_2D);
 		m_services.arbiter->setActiveWorkspace(Workspace::TEXTURE_MAP_2D);
@@ -771,12 +787,29 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
 		if (m_services.camera) {
 			m_services.camera->updatePoseTransition(frame.deltaTime);
 			if (m_services.camera->poseTransitionActive()) return;
-			m_services.camera->setBehaviorMode(
-				CameraProcessor::CAM_STANDARD_2D_LOCKED);
+			m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
 		}
+
 		m_services.arbiter->setWorkspaceDomain(Domain::GRID_2D);
 		m_services.arbiter->setActiveWorkspace(Workspace::TEXTURE_MAP_2D);
+
 		m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
+
+		if (m_transitionDomain == Domain::GRID_2D) {
+			m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_2D);
+
+			if (m_services.camera)
+				m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_2D_LOCKED);
+		}
+		else if (m_transitionDomain == Domain::GRID_3D) {
+			// GRID_3D now enters through its
+			// first domain cartridge just like GRID_2D.
+			m_services.arbiter->setActiveWorkspace(Workspace::GRAPH_3D);
+
+			if (m_services.camera) 
+				m_services.camera->setBehaviorMode(CameraProcessor::CAM_STANDARD_3D_ORBIT);
+		}
+
 		m_domainTransitionPhase = DomainTransitionPhase::NONE;
 		m_transitionDomain = Domain::NONE;
 		synchronizeActiveCartridge();
@@ -827,8 +860,31 @@ void Tesseract::synchronizeActiveCartridge() {
 		m_services.arbiter->getWorkspaceDomain() ==
 		TheArbiter::WorkspaceDomain::GRID_3D) {
 
-		desired = &m_singleParticleWorkspace;
-		desiredName = "SINGLE_PARTICLE_MCAD";
+		using Workspace = TheArbiter::WorkspaceId;
+
+		switch (m_services.arbiter->getActiveWorkspace()) {
+
+		case Workspace::GRAPH_3D:
+			desired = &m_graph3DWorkspace;
+			desiredName = "GRAPH_3D";
+			break;
+
+		case Workspace::SINGLE_PARTICLE_MCAD:
+			desired = &m_singleParticleWorkspace;
+			desiredName = "SINGLE_PARTICLE_MCAD";
+			break;
+
+		case Workspace::LINKED_PARTICLES_MCAD:
+			desired = &m_linkedParticlesWorkspace;
+			desiredName = "LINKED_PARTICLES_MCAD";
+			break;
+
+		default:
+			desired = &m_graph3DWorkspace;
+			desiredName = "GRAPH_3D";
+			break;
+		}
+		
 	}
 
 	activateCartridge(desired, desiredName);

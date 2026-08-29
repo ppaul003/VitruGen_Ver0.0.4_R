@@ -89,7 +89,9 @@
     <ClCompile Include="DiagnosticIdle.cpp" />
     <ClCompile Include="EuclidEngine.cpp" />
     <ClCompile Include="Graph2DWorkspace.cpp" />
+    <ClCompile Include="Graph3DWorkspace.cpp" />
     <ClCompile Include="JsonValue.cpp" />
+    <ClCompile Include="LinkedParticlesWorkspace.cpp" />
     <ClCompile Include="marchingCubes.cpp" />
     <ClCompile Include="MeshGeometry.cpp" />
     <ClCompile Include="MeshProcessor.cpp" />
@@ -125,11 +127,13 @@
     <ClInclude Include="DiagnosticIdle.h" />
     <ClInclude Include="EuclidEngine.h" />
     <ClInclude Include="Graph2DWorkspace.h" />
+    <ClInclude Include="Graph3DWorkspace.h" />
     <ClInclude Include="Interactions.h" />
     <ClInclude Include="IWorkspace.h" />
     <ClInclude Include="JsonValue.h" />
     <ClInclude Include="kernel.h" />
     <ClInclude Include="kernel_impl.cuh" />
+    <ClInclude Include="LinkedParticlesWorkspace.h" />
     <ClInclude Include="marchingCubes.h" />
     <ClInclude Include="MeshGeometry.h" />
     <ClInclude Include="MeshProcessor.h" />

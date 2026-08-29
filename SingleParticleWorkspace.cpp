@@ -340,36 +340,23 @@ bool SingleParticleWorkspace::handleLayer1Input(
 	case WorkspaceInputAction::Previous:
 		moveLayer1Cursor(-1);
 		return true;
+
 	case WorkspaceInputAction::Next:
 		moveLayer1Cursor(+1);
 		return true;
+
 	case WorkspaceInputAction::Decrease:
-		adjustLayer1Value(-1);
-		if (services.arbiter) {
-			using Id = TheArbiter::WorkspaceId;
-			const Id id = m_grid3DWorkspace == Grid3DWorkspace::Graph3D
-				? Id::GRAPH_3D
-				: m_grid3DWorkspace == Grid3DWorkspace::LinkedParticles
-				? Id::LINKED_PARTICLES_MCAD
-				: Id::SINGLE_PARTICLE_MCAD;
-			services.arbiter->setActiveWorkspace(id);
-		}
+		adjustLayer1Value(-1, services);
 		return true;
+
 	case WorkspaceInputAction::Increase:
-		adjustLayer1Value(+1);
-		if (services.arbiter) {
-			using Id = TheArbiter::WorkspaceId;
-			const Id id = m_grid3DWorkspace == Grid3DWorkspace::Graph3D
-				? Id::GRAPH_3D
-				: m_grid3DWorkspace == Grid3DWorkspace::LinkedParticles
-				? Id::LINKED_PARTICLES_MCAD
-				: Id::SINGLE_PARTICLE_MCAD;
-			services.arbiter->setActiveWorkspace(id);
-		}
+		adjustLayer1Value(+1, services);
 		return true;
+
 	case WorkspaceInputAction::Activate:
 		activateLayer1(services);
 		return true;
+
 	default:
 		return false;
 	}
@@ -518,31 +505,50 @@ void SingleParticleWorkspace::moveLayer1Cursor(int direction) {
 		direction);
 }
 
-void SingleParticleWorkspace::adjustLayer1Value(int direction) {
+void SingleParticleWorkspace::adjustLayer1Value(int direction, WorkspaceServices& services) {
+	if (direction == 0) return;
+
+	// =====================================================
+	// [1] SWITCH GRID_3D WORKSPACE
+	// =====================================================
 	if (m_layer1Item == Layer1Item::Workspace) {
-		m_grid3DWorkspace = cycleEnum(
-			m_grid3DWorkspace,
-			static_cast<int>(Grid3DWorkspace::Count),
-			direction);
+
+		if (!services.arbiter) return;
+
+		services.arbiter->setActiveWorkspace(
+			direction < 0
+			? TheArbiter::WorkspaceId::GRAPH_3D
+			: TheArbiter::WorkspaceId::LINKED_PARTICLES_MCAD
+		);
+
+		return;
 	}
-	else if (m_layer1Item == Layer1Item::ParticleType) {
-		m_objectType = cycleEnum(
-			m_objectType,
-			static_cast<int>(ObjectType::Count),
-			direction);
+
+	// =====================================================
+	// [2] PARTICLE TYPE
+	// =====================================================
+	if (m_layer1Item ==
+		Layer1Item::ParticleType) {
+
+		m_objectType =
+			cycleEnum(
+				m_objectType,
+				static_cast<int>(ObjectType::Count),
+				direction
+			);
 	}
 }
 
 void SingleParticleWorkspace::activateLayer1(WorkspaceServices& services) {
 	if (m_layer1Item != Layer1Item::Configure ||
-		m_grid3DWorkspace != Grid3DWorkspace::SingleParticle ||
-		m_objectType != ObjectType::Static || !services.arbiter) return;
+		m_objectType != ObjectType::Static || 
+		!services.arbiter) return;
 
-	services.arbiter->setActiveWorkspace(
-		TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD);
-	services.arbiter->setApplicationLayer(
-		TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION);
+	services.arbiter->setActiveWorkspace(TheArbiter::WorkspaceId::SINGLE_PARTICLE_MCAD);
+	services.arbiter->setApplicationLayer(TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION);
+	
 	m_layer2Item = Layer2Item::Color;
+
 	placeAnchor();
 	syncParticleRendering(services);
 	updateCameraIntent(services);
@@ -1706,33 +1712,63 @@ SingleParticleWorkspace::runtimeOverlapStatus() const {
 }
 
 WorkspacePresentation SingleParticleWorkspace::buildLayer1Presentation() const {
+
 	WorkspacePresentation p;
 	p.panelVisible = true;
 	p.workspaceName = "LAYER 1 -> GRID_3D WORKSPACE CONFIGURATION";
-	p.layerLabel = std::string("MODE: ") + workspaceName();
+	p.layerLabel = "MODE: SINGLE_PARTICLE";
+
 	WorkspacePanelSection section;
-	section.rows.push_back(makeRow("[1]: GRID_3D SELECTION", workspaceName(),
-		m_layer1Item == Layer1Item::Workspace));
-	section.rows.push_back(makeRow("[2]: PARTICLE TYPE", objectTypeName(),
-		m_layer1Item == Layer1Item::ParticleType));
-	section.rows.push_back(makeRow("[3]: PRESS E TO CONFIGURE SIM", "",
-		m_layer1Item == Layer1Item::Configure));
+
+	section.rows.push_back(
+		makeRow(
+			"[1]: GRID_3D SELECTION", 
+			"SINGLE_PARTICLE",
+			m_layer1Item == Layer1Item::Workspace
+		)
+	);
+
+	section.rows.push_back(
+		makeRow(
+			"[2]: PARTICLE TYPE", 
+			objectTypeName(),
+			m_layer1Item == Layer1Item::ParticleType
+		)
+	);
+
+	section.rows.push_back(
+		makeRow(
+			"[3]: PRESS E TO CONFIGURE SIM",
+			"", 
+			m_layer1Item == Layer1Item::Configure
+		)
+	);
+
 	p.sections.push_back(section);
 
-	if (m_grid3DWorkspace != Grid3DWorkspace::SingleParticle)
-		p.statusLine = "Selected GRID_3D workspace is reserved in this cartridge sprint.";
-	else if (m_objectType == ObjectType::Static) {
+	if (m_objectType == ObjectType::Static) {
+
 		p.statusLine = "STATIC PARTICLE PIPELINE READY.";
 		p.statusTone = WorkspaceStatusTone::Ready;
 	}
 	else {
-		p.statusLine = m_objectType == ObjectType::Composite
+
+		p.statusLine = 
+			m_objectType == ObjectType::Composite
 			? "COMPOSITE PARTICLE PIPELINE RESERVED - VER 0.0.5."
 			: "ATOMIC PARTICLE PIPELINE RESERVED.";
+
 		p.statusTone = WorkspaceStatusTone::Warning;
 	}
-	p.footerLine1 = "W / S: Select list     A / D: Change value";
-	p.footerLine2 = "E: Configure when LIST 3 selected     Q: Back one layer";
+
+	p.footerLine1 =
+		"W / S: Select list     "
+		"A / D: Change value";
+
+	p.footerLine2 =
+		"E: Configure when LIST 3 selected     "
+		"Q: Back one layer";
+
 	return p;
 }
 
@@ -2196,11 +2232,11 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 				WorkspaceSubLayerPanelLayout::AssemblyOffsetVolume0;
 			WorkspacePanelSection offset;
 			offset.heading = "Offset Grid Vector:";
-			offset.rows.push_back(makeRow("[1] Offset", offsetVectorName(),
+			offset.rows.push_back(makeRow("[1]: Offset", offsetVectorName(),
 				m_activePanelItem == 0));
 			char increment[32];
 			std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
-			offset.rows.push_back(makeRow("[2] Increments", increment,
+			offset.rows.push_back(makeRow("[2]: Increments", increment,
 				m_activePanelItem == 1));
 			p.sections.push_back(offset);
 
@@ -2210,13 +2246,13 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 				: isSPVolumeBoundarySafe() ? "READY"
 				: "BLOCKED: " + std::to_string(m_volumeBoundaryUnsafeCount) +
 					" PATCHES";
-			WorkspacePanelRow apply = makeRow("[3] Apply To Base", state,
+			WorkspacePanelRow apply = makeRow("[3]: Apply To Base", state,
 				m_activePanelItem == 2);
 			apply.selectable = canApplyVolumeToBase();
 			apply.tone = apply.selectable
 				? WorkspaceStatusTone::Ready : WorkspaceStatusTone::Warning;
 			traversal.rows.push_back(apply);
-			traversal.rows.push_back(makeRow("[4] Edit Object", "",
+			traversal.rows.push_back(makeRow("[4]: Edit Object", "",
 				m_activePanelItem == 3));
 			p.sections.push_back(traversal);
 			return;
@@ -2227,24 +2263,24 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			: WorkspaceSubLayerPanelLayout::AssemblyOffsetTargetVolume0;
 		WorkspacePanelSection targetSection;
 		targetSection.heading = "Edit Offset Volume:";
-		targetSection.rows.push_back(makeRow("[1] Select", target,
+		targetSection.rows.push_back(makeRow("[1]: Select", target,
 			m_activePanelItem == 0));
 		p.sections.push_back(targetSection);
 
 		WorkspacePanelSection offset;
 		offset.heading = "Offset Grid Vector:";
-		offset.rows.push_back(makeRow("[2] Offset", offsetVectorName(),
+		offset.rows.push_back(makeRow("[2]: Offset", offsetVectorName(),
 			m_activePanelItem == 1));
 		char increment[32];
 		std::snprintf(increment, sizeof(increment), "%.3g", m_offsetIncrement);
-		offset.rows.push_back(makeRow("[3] Increments", increment,
+		offset.rows.push_back(makeRow("[3]: Increments", increment,
 			m_activePanelItem == 2));
 		p.sections.push_back(offset);
 
 		if (volume1) {
 			WorkspacePanelSection mode;
 			mode.heading = "Voxel Injection Mode:";
-			mode.rows.push_back(makeRow("[4] Inject",
+			mode.rows.push_back(makeRow("[4]: Inject",
 				m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE",
 				m_activePanelItem == 3));
 			mode.notes.push_back(
@@ -2258,7 +2294,7 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 			rail.heading = "Injection Rail:";
 			char railValue[32];
 			std::snprintf(railValue, sizeof(railValue), "%.2f", m_injectionRailT);
-			rail.rows.push_back(makeRow("[4] Injection Vector", railValue,
+			rail.rows.push_back(makeRow("[4]: Injection Vector", railValue,
 				m_activePanelItem == 3));
 			p.sections.push_back(rail);
 
@@ -2271,13 +2307,13 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 				: "BLOCKED: " + std::to_string(m_volumeBoundaryUnsafeCount) +
 					" PATCHES";
 			WorkspacePanelRow apply = makeRow(
-				cut ? "[5] Cut Voxel From Anchor" : "[5] Fuse Voxel To Anchor",
+				cut ? "[5]: Cut Voxel From Anchor" : "[5]: Fuse Voxel To Anchor",
 				state, m_activePanelItem == 4);
 			apply.selectable = canApplyVolumeToBase();
 			apply.tone = apply.selectable
 				? WorkspaceStatusTone::Ready : WorkspaceStatusTone::Warning;
 			traversal.rows.push_back(apply);
-			traversal.rows.push_back(makeRow("[6] Edit Object", "",
+			traversal.rows.push_back(makeRow("[6]: Edit Object", "",
 				m_activePanelItem == 5));
 			p.sections.push_back(traversal);
 		}
@@ -2289,26 +2325,17 @@ void SingleParticleWorkspace::appendVolumePanel(WorkspacePresentation& p) const 
 	WorkspacePanelSection apply;
 	apply.heading = std::string("Apply Operation Mode { ") +
 		(m_injectionMode == InjectionMode::Cut ? "CUT" : "FUSE") + " }";
-	apply.rows.push_back(makeRow("[1] Commit / Loop Back To Preview", "",
+	apply.rows.push_back(makeRow("[1]: Commit / Loop Back To Preview", "",
 		m_activePanelItem == 0));
 	p.sections.push_back(apply);
 
 	WorkspacePanelSection traversal;
 	traversal.heading = "Next/Prev Node:";
-	traversal.rows.push_back(makeRow("[2] Preview Object", "",
+	traversal.rows.push_back(makeRow("[2]: Preview Object", "",
 		m_activePanelItem == 2));
-	traversal.rows.push_back(makeRow("[3] Offset Object", "",
+	traversal.rows.push_back(makeRow("[3]: Offset Object", "",
 		m_activePanelItem == 1));
 	p.sections.push_back(traversal);
-}
-
-
-const char* SingleParticleWorkspace::workspaceName() const {
-	switch (m_grid3DWorkspace) {
-	case Grid3DWorkspace::Graph3D: return "GRAPH_3D";
-	case Grid3DWorkspace::LinkedParticles: return "LINKED_PARTICLES";
-	default: return "SINGLE_PARTICLE";
-	}
 }
 
 const char* SingleParticleWorkspace::objectTypeName() const {

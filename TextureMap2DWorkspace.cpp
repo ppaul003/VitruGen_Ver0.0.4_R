@@ -185,11 +185,8 @@ WorkspacePresentation TextureMap2DWorkspace::buildLayer1Presentation() const {
 	WorkspacePresentation p;
 	p.panelVisible = true;
 
-	p.workspaceName = 
-		"LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
-
-	p.layerLabel = 
-		"DOMAIN: GRID_2D";
+	p.workspaceName = "LAYER 1 -> GRID_2D WORKSPACE CONFIGURATION";
+	p.layerLabel = "MODE: TEXTURE_MAP_2D";
 
 	WorkspacePanelSection section;
 

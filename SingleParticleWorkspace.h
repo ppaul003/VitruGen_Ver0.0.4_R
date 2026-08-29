@@ -23,13 +23,6 @@ public:
 		ExportObj 
 	};
 
-	enum class Grid3DWorkspace {
-		Graph3D = 0,
-		SingleParticle,
-		LinkedParticles,
-		Count
-	};
-
 	enum class Layer1Item {
 		Workspace = 0,
 		ParticleType,
@@ -395,7 +388,6 @@ private:
 	bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 	bool handleLayer3Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 
-	const char* workspaceName() const;
 	const char* objectTypeName() const;
 	const char* particleColorName() const;
 	const char* particleRenderModeName() const;
@@ -417,7 +409,7 @@ private:
 	int rotationIncrementDegrees() const;
 
 	void moveLayer1Cursor(int direction);
-	void adjustLayer1Value(int direction);
+	void adjustLayer1Value(int direction, WorkspaceServices& services);
 	void activateLayer1(WorkspaceServices& services);
 	void moveLayer2Cursor(int direction);
 	void adjustLayer2Value(int direction);
@@ -606,8 +598,6 @@ private:
 
 	EuclidRenderer* m_renderer = nullptr;
 	bool m_anchorPlaced = false;
-
-	Grid3DWorkspace m_grid3DWorkspace = Grid3DWorkspace::SingleParticle;
 
 	Layer1Item m_layer1Item = Layer1Item::Workspace;
 	Layer2Item m_layer2Item = Layer2Item::Color;
