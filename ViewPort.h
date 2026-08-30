@@ -134,6 +134,8 @@ private:
 	void drawPresentationSections(const WorkspacePresentation& presentation);
 	void drawPresentationFooter(const WorkspacePresentation& presentation);
 	void drawRuntimeStatusPanel(const WorkspaceRuntimeStatus& status);
+	void drawSelectionCursor(
+		const WorkspaceSelectionCursorPresentation& cursor);
 
 	// ---------------------------------------------------------
 	// Generic row rendering.

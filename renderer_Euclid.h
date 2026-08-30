@@ -398,6 +398,31 @@ public:
 		bool showCollisionRadius
 	);
 
+	void displayTextureMapStaticParticlePreview(
+		float thetaRad,
+		float phiRad,
+		float zs,
+		float previewRadius,
+		bool showCollisionRadius,
+		bool showConfigurationGuides,
+		bool selectedTarget,
+		float revealProgress = 1.0f
+	);
+
+	void displayTextureMapPixelEditor(
+		const vitru::ImageRGBA8& atlasImage,
+		std::uint32_t faceIndex,
+		std::uint32_t gridDivisions,
+		int cursorX,
+		int cursorY,
+		const std::vector<vitru::Vec2>& contourPoints,
+		bool contourClosed,
+		float editorZoom,
+		float transitionVisibility = 1.0f
+	);
+
+	bool hitTestTextureMapPreview(int x, int y) const;
+
 protected:
 	void _initGL();
 	void _initialize();

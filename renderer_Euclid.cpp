@@ -2436,6 +2436,402 @@ void EuclidRenderer::displayParticleWorkspace(
     glUseProgram(0);
 }
 
+void EuclidRenderer::displayTextureMapStaticParticlePreview(
+    float thetaRad,
+    float phiRad,
+    float zs,
+    float previewRadius,
+    bool showCollisionRadius,
+    bool showConfigurationGuides,
+    bool selectedTarget,
+    float revealProgress) {
+
+    m_textureMapPreviewScreenVertices.clear();
+    const float reveal = std::max(0.0f,
+        std::min(1.0f, revealProgress));
+    if (!hasParticleMeshOBJ() ||
+        previewRadius <= 0.0f || reveal <= 0.001f) {
+
+        return;
+    }
+
+    glViewport(
+        0,
+        0,
+        m_window_w,
+        m_window_h
+    );
+
+    // ---------------------------------------------------------
+    // Match SINGLE_PARTICLE Layer 2 projection.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const float aspect =
+        m_window_h > 0
+        ? static_cast<float>(m_window_w) /
+        static_cast<float>(m_window_h)
+        : 1.0f;
+
+    gluPerspective(
+        m_fov,
+        aspect,
+        0.1f,
+        100.0f
+    );
+
+    // ---------------------------------------------------------
+    // Match SINGLE_PARTICLE pocket-camera behavior.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const float safeZs =
+        std::max(
+            zs,
+            1.0f
+        );
+
+    const float zoomScale =
+        safeZs / 256.0f;
+
+    const float spCadBaseDistance =
+        1.25f;
+
+    glTranslatef(
+        0.0f,
+        0.0f,
+        -spCadBaseDistance * zoomScale
+    );
+
+    glRotatef(
+        phiRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        1.0f,
+        0.0f,
+        0.0f
+    );
+
+    glRotatef(
+        thetaRad *
+        180.0f /
+        static_cast<float>(M_PI),
+        0.0f,
+        1.0f,
+        0.0f
+    );
+
+    // Generic reveal used by workspace transitions: the wire cage, axes,
+    // and target expand together from the centered origin.
+    glScalef(reveal, reveal, reveal);
+
+    glEnable(GL_DEPTH_TEST);
+
+    // Layer 2 retains the existing configuration framing.
+    // Layer 3 is intentionally a clean textured-mesh preview.
+    glUseProgram(0);
+    glDisable(GL_TEXTURE_2D);
+
+    if (showConfigurationGuides) {
+
+        drawWorkspaceBoundary();
+        drawAxes();
+    }
+
+    // ---------------------------------------------------------
+    // Render the canonical StaticParticleAsset at the requested
+    // texture-map preview radius.
+    // ---------------------------------------------------------
+    ParticleProxy3D previewParticle;
+
+    previewParticle.position =
+        make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    previewParticle.radius = previewRadius;
+
+    const float4 previewColor =
+        make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    // FILL keeps the loaded asset uniformly inside the
+    // diameter defined by previewRadius.
+    drawParticleMeshOBJ(
+        previewParticle,
+        previewColor,
+        selectedTarget,
+        true,
+        false
+    );
+
+    // Cache the actual projected mesh triangles for the Layer 3
+    // reference-selection gate. Picking follows the rendered target rather
+    // than a hard-coded screen rectangle.
+    if (m_particleMeshMaxExtent > 0.0f &&
+        (m_particleMeshVerts.size() % 3u) == 0u) {
+        GLdouble modelView[16]{};
+        GLdouble projection[16]{};
+        GLint viewport[4]{};
+        glGetDoublev(GL_MODELVIEW_MATRIX, modelView);
+        glGetDoublev(GL_PROJECTION_MATRIX, projection);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        const double scale = static_cast<double>(2.0f * previewRadius /
+            m_particleMeshMaxExtent);
+        m_textureMapPreviewScreenVertices.reserve(m_particleMeshVerts.size());
+        for (const glm::vec3& vertex : m_particleMeshVerts) {
+            const double localX = static_cast<double>(
+                vertex.x - m_particleMeshCenter.x) * scale;
+            const double localY = static_cast<double>(
+                vertex.y - m_particleMeshCenter.y) * scale;
+            const double localZ = static_cast<double>(
+                vertex.z - m_particleMeshCenter.z) * scale;
+            GLdouble windowX = 0.0;
+            GLdouble windowY = 0.0;
+            GLdouble windowZ = 0.0;
+            if (gluProject(localX, localY, localZ,
+                modelView, projection, viewport,
+                &windowX, &windowY, &windowZ) == GL_TRUE) {
+                m_textureMapPreviewScreenVertices.emplace_back(
+                    static_cast<float>(windowX),
+                    static_cast<float>(m_window_h) -
+                        static_cast<float>(windowY));
+            }
+            else {
+                m_textureMapPreviewScreenVertices.clear();
+                break;
+            }
+        }
+    }
+
+    glUseProgram(0);
+
+    if (showCollisionRadius) {
+
+        drawParticleWireSphere(
+            previewParticle,
+            make_float4(0.15f, 0.95f, 1.0f, 1.0f),
+            2.25f,
+            0.92f,
+            true
+        );
+    }
+
+    // ---------------------------------------------------------
+    // Restore matrices.
+    // ---------------------------------------------------------
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    glMatrixMode(GL_MODELVIEW);
+}
+
+bool EuclidRenderer::hitTestTextureMapPreview(int x, int y) const {
+    const glm::vec2 point(static_cast<float>(x), static_cast<float>(y));
+    auto edge = [](const glm::vec2& a, const glm::vec2& b,
+        const glm::vec2& p) {
+        return (p.x - a.x) * (b.y - a.y) -
+            (p.y - a.y) * (b.x - a.x);
+    };
+    for (std::size_t i = 0u;
+        i + 2u < m_textureMapPreviewScreenVertices.size(); i += 3u) {
+        const glm::vec2& a = m_textureMapPreviewScreenVertices[i];
+        const glm::vec2& b = m_textureMapPreviewScreenVertices[i + 1u];
+        const glm::vec2& c = m_textureMapPreviewScreenVertices[i + 2u];
+        const float ab = edge(a, b, point);
+        const float bc = edge(b, c, point);
+        const float ca = edge(c, a, point);
+        const bool negative = ab < 0.0f || bc < 0.0f || ca < 0.0f;
+        const bool positive = ab > 0.0f || bc > 0.0f || ca > 0.0f;
+        if (!(negative && positive)) return true;
+    }
+    return false;
+}
+
+void EuclidRenderer::displayTextureMapPixelEditor(
+    const vitru::ImageRGBA8& atlasImage,
+    std::uint32_t faceIndex,
+    std::uint32_t gridDivisions,
+    int cursorX,
+    int cursorY,
+    const std::vector<vitru::Vec2>& contourPoints,
+    bool contourClosed,
+    float editorZoom,
+    float transitionVisibility) {
+
+    if (!atlasImage.valid() || faceIndex >= 6u || gridDivisions == 0u)
+        return;
+
+    const float visibility = std::max(0.0f,
+        std::min(1.0f, transitionVisibility));
+    if (visibility <= 0.001f) return;
+
+    const float canvas = std::min(
+        static_cast<float>(m_window_h) * 0.72f,
+        static_cast<float>(m_window_w) * 0.55f) *
+		std::max(0.65f, std::min(1.65f, editorZoom)) * visibility;
+    const float centerX = static_cast<float>(m_window_w) *
+        (0.50f + 0.12f * visibility);
+    const float left = centerX - canvas * 0.5f;
+    const float bottom = (static_cast<float>(m_window_h) - canvas) * 0.5f;
+    const float right = left + canvas;
+    const float top = bottom + canvas;
+    const float u0 = static_cast<float>(faceIndex % 3u) / 3.0f;
+    const float u1 = static_cast<float>(faceIndex % 3u + 1u) / 3.0f;
+    const float v0 = static_cast<float>(faceIndex / 3u) / 2.0f;
+    const float v1 = static_cast<float>(faceIndex / 3u + 1u) / 2.0f;
+
+    GLint oldProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+    glUseProgram(0);
+    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT |
+        GL_POINT_BIT | GL_TEXTURE_BIT | GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, static_cast<double>(m_window_w), 0.0,
+        static_cast<double>(m_window_h), -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+        static_cast<GLsizei>(atlasImage.width),
+        static_cast<GLsizei>(atlasImage.height), 0,
+        GL_RGBA, GL_UNSIGNED_BYTE, atlasImage.pixels.data());
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1.0f, 1.0f, 1.0f, visibility);
+    glBegin(GL_QUADS);
+    glTexCoord2f(u0, v0); glVertex2f(left, bottom);
+    glTexCoord2f(u1, v0); glVertex2f(right, bottom);
+    glTexCoord2f(u1, v1); glVertex2f(right, top);
+    glTexCoord2f(u0, v1); glVertex2f(left, top);
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &texture);
+
+    // Faint selected-face UV geometry derived from the currently loaded
+    // StaticParticle mesh. This is an editor-only guide and never touches
+    // the CPU texture buffer or saved output.
+    if (m_particleMeshUVs.size() == m_particleMeshVerts.size() &&
+        (m_particleMeshUVs.size() % 3u) == 0u) {
+        auto drawUvGeometry = [&](float width, float r, float g,
+            float b, float alpha) {
+            glLineWidth(width);
+            glColor4f(r, g, b, alpha);
+            glBegin(GL_LINES);
+            for (std::size_t i = 0u; i + 2u < m_particleMeshUVs.size(); i += 3u) {
+                const glm::vec2 centroid =
+                    (m_particleMeshUVs[i] + m_particleMeshUVs[i + 1u] +
+                        m_particleMeshUVs[i + 2u]) / 3.0f;
+                const int triangleColumn = (std::min)(2,
+                    (std::max)(0, static_cast<int>(std::floor(centroid.x * 3.0f))));
+                const int triangleRow = (std::min)(1,
+                    (std::max)(0, static_cast<int>(std::floor(centroid.y * 2.0f))));
+                if (triangleColumn != static_cast<int>(faceIndex % 3u) ||
+                    triangleRow != static_cast<int>(faceIndex / 3u)) continue;
+                for (int edgeIndex = 0; edgeIndex < 3; edgeIndex++) {
+                    const glm::vec2& a = m_particleMeshUVs[
+                        i + static_cast<std::size_t>(edgeIndex)];
+                    const glm::vec2& bPoint = m_particleMeshUVs[
+                        i + static_cast<std::size_t>((edgeIndex + 1) % 3)];
+                    const float ax = (a.x - u0) / (u1 - u0);
+                    const float ay = (a.y - v0) / (v1 - v0);
+                    const float bx = (bPoint.x - u0) / (u1 - u0);
+                    const float by = (bPoint.y - v0) / (v1 - v0);
+                    glVertex2f(left + ax * canvas, bottom + ay * canvas);
+                    glVertex2f(left + bx * canvas, bottom + by * canvas);
+                }
+            }
+            glEnd();
+        };
+        drawUvGeometry(2.4f, 0.0f, 0.0f, 0.0f,
+            0.28f * visibility);
+        drawUvGeometry(1.0f, 0.82f, 0.96f, 1.0f,
+            0.45f * visibility);
+    }
+
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    for (std::uint32_t i = 0u; i <= gridDivisions; i++) {
+        const float t = static_cast<float>(i) /
+            static_cast<float>(gridDivisions);
+        if ((i % 8u) == 0u)
+            glColor4f(0.2f, 1.0f, 0.9f, 0.55f * visibility);
+        else glColor4f(0.0f, 0.0f, 0.0f, 0.28f * visibility);
+        glVertex2f(left + canvas * t, bottom);
+        glVertex2f(left + canvas * t, top);
+        glVertex2f(left, bottom + canvas * t);
+        glVertex2f(right, bottom + canvas * t);
+    }
+    glEnd();
+
+    if (cursorX >= 0 && cursorY >= 0 &&
+        cursorX < static_cast<int>(gridDivisions) &&
+        cursorY < static_cast<int>(gridDivisions)) {
+        const float cell = canvas / static_cast<float>(gridDivisions);
+        const float x0 = left + static_cast<float>(cursorX) * cell;
+        const float y0 = bottom + static_cast<float>(cursorY) * cell;
+        glLineWidth(2.5f);
+        glColor4f(1.0f, 0.85f, 0.05f, visibility);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(x0, y0); glVertex2f(x0 + cell, y0);
+        glVertex2f(x0 + cell, y0 + cell); glVertex2f(x0, y0 + cell);
+        glEnd();
+    }
+
+    if (contourPoints.size() >= 2u) {
+        auto drawContour = [&](float width, float r, float g, float b) {
+            glLineWidth(width);
+            glColor4f(r, g, b, visibility);
+            glBegin(contourClosed ? GL_LINE_LOOP : GL_LINE_STRIP);
+            for (const vitru::Vec2& point : contourPoints)
+                glVertex2f(left + point.x * canvas, bottom + point.y * canvas);
+            glEnd();
+        };
+        drawContour(5.0f, 0.0f, 0.0f, 0.0f);
+        drawContour(2.5f, 0.0f, 0.95f, 1.0f);
+
+        glPointSize(10.0f);
+        glBegin(GL_POINTS);
+        for (std::size_t i = 0; i < contourPoints.size(); i++) {
+            if (i == 0u)
+                glColor4f(0.1f, 1.0f, 0.25f, visibility);
+            else if (i + 1u == contourPoints.size())
+                glColor4f(1.0f, 0.45f, 0.05f, visibility);
+            else glColor4f(0.0f, 0.95f, 1.0f, visibility);
+            glVertex2f(left + contourPoints[i].x * canvas,
+                bottom + contourPoints[i].y * canvas);
+        }
+        glEnd();
+    }
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopAttrib();
+    glUseProgram(static_cast<GLuint>(oldProgram));
+}
+
 void EuclidRenderer::displayParticleMeshVolumeWorkspace(
     float thetaRad,
     float phiRad,

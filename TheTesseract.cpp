@@ -223,6 +223,13 @@ bool Tesseract::handleInput(const WorkspaceInputEvent& event) {
 	return handled;
 }
 
+bool Tesseract::allowsInputRepeat(
+	const WorkspaceInputEvent& event) const {
+	return !workspaceInputLocked() &&
+		m_activeWorkspace &&
+		m_activeWorkspace->allowsInputRepeat(event);
+}
+
 // =============================================================================
 // PRESENTATION
 // =============================================================================
@@ -389,6 +396,11 @@ void Tesseract::replaceTextureMap2DOutputCatalog(
 	vector<vitru::StaticAssetCatalogEntry> catalog) {
 
 	m_texMap2DWorkspace.replaceOutputCatalog(move(catalog));
+}
+
+void Tesseract::replaceTextureMap2DBaseMaterialCatalog(
+	vector<vitru::BaseMaterialCatalogEntry> catalog) {
+	m_texMap2DWorkspace.replaceBaseMaterialCatalog(move(catalog));
 }
 
 void Tesseract::completeTextureMap2DTargetLoad(
@@ -583,6 +595,31 @@ void Tesseract::processNavigationRequest() {
 
 		m_services.camera->beginTransitionToCentered2D(kGrid3DCamTransCenter2D);
 
+		return;
+
+	case RequestType::ENTER_ACTIVE_WORKSPACE:
+		if (request.domain != Domain::GRID_2D ||
+			request.workspace != Workspace::TEXTURE_MAP_2D) return;
+		m_services.arbiter->setWorkspaceDomain(request.domain);
+		m_services.arbiter->setActiveWorkspace(request.workspace);
+		m_services.arbiter->setApplicationLayer(Layer::ACTIVE_WORKSPACE);
+		if (m_services.camera)
+			m_services.camera->setBehaviorMode(
+				CameraProcessor::CAM_STANDARD_OBJECT_ORBIT);
+		synchronizeActiveCartridge();
+		return;
+
+	case RequestType::RETURN_WORKSPACE_CONFIGURATION:
+		if (request.domain != Domain::GRID_2D ||
+			request.workspace != Workspace::TEXTURE_MAP_2D) return;
+		m_services.arbiter->setWorkspaceDomain(request.domain);
+		m_services.arbiter->setActiveWorkspace(request.workspace);
+		m_services.arbiter->setApplicationLayer(
+			Layer::WORKSPACE_CONFIGURATION);
+		if (m_services.camera)
+			m_services.camera->setBehaviorMode(
+				CameraProcessor::CAM_STANDARD_OBJECT_ORBIT);
+		synchronizeActiveCartridge();
 		return;
 
 

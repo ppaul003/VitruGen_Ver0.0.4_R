@@ -27,6 +27,32 @@ namespace fs = std::filesystem;
 
 EuclidEngine* EuclidEngine::s_instance = nullptr;
 
+namespace {
+	fs::path locateVitruGenProjectRoot() {
+		std::vector<fs::path> candidates;
+		std::error_code error;
+		candidates.push_back(fs::current_path(error));
+#ifdef _WIN32
+		char executablePath[MAX_PATH]{};
+		const DWORD length = GetModuleFileNameA(nullptr, executablePath, MAX_PATH);
+		if (length > 0 && length < MAX_PATH) {
+			fs::path cursor = fs::path(executablePath).parent_path();
+			for (int depth = 0; depth < 5 && !cursor.empty(); depth++) {
+				candidates.push_back(cursor);
+				cursor = cursor.parent_path();
+			}
+		}
+#endif
+		for (const fs::path& candidate : candidates) {
+			error.clear();
+			if (fs::is_directory(candidate / "INPUTS" / "TEXTURE_MAP_2D", error) &&
+				fs::is_directory(candidate / "OUTPUT", error))
+				return fs::weakly_canonical(candidate, error);
+		}
+		return fs::current_path(error);
+	}
+}
+
 #ifdef _WIN32
 
 namespace {
@@ -207,6 +233,7 @@ bool EuclidEngine::init(int argc, char** argv) {
 	glutMotionFunc(&EuclidEngine::sMotion);
 	glutPassiveMotionFunc(&EuclidEngine::sPassiveMotion);
 	glutKeyboardFunc(&EuclidEngine::sKeyboard);
+	glutKeyboardUpFunc(&EuclidEngine::sKeyboardUp);
 	glutIdleFunc(&EuclidEngine::sIdle);
 	
 	glutCloseFunc(&EuclidEngine::sClose);
@@ -290,6 +317,11 @@ bool EuclidEngine::initWorkspaceHost() {
 	services.arbiter = &m_arbiter;
 	services.viewport = &m_viewport;
 	services.camera = &m_camera;
+	services.assetRepository = &m_assetRepository;
+	services.projectRoot = locateVitruGenProjectRoot();
+	m_inputsRoot = services.projectRoot / "INPUTS";
+	m_outputRoot = services.projectRoot / "OUTPUT";
+	m_workspaceObj = services.projectRoot / "SINGLE_PARTICLE_DATA" / "p0.obj";
 
 	// ---------------------------------------------------------
 	// Establish host structural state.
@@ -330,6 +362,7 @@ EuclidEngine::buildWorkspaceFrameContext(float deltaTime) const {
 	frame.phiRad = rotation[0] * degreesToRadians;
 	frame.thetaRad = rotation[1] * degreesToRadians;
 	frame.zoom = 1.0f;
+	frame.objectPreviewZs = m_camera.getObjectPreviewZs();
 	frame.particleWorkspaceZs = m_camera.getParticleWorkspaceZs();
 	frame.volumeRenderZs = m_camera.getVolumeRenderZs();
 
@@ -540,6 +573,10 @@ void EuclidEngine::sKeyboard(unsigned char k, int x, int y) {
 	if (s_instance) s_instance->onKeyboard(k, x, y);
 }
 
+void EuclidEngine::sKeyboardUp(unsigned char k, int x, int y) {
+	if (s_instance) s_instance->onKeyboardUp(k, x, y);
+}
+
 void EuclidEngine::sIdle() {
 	if (s_instance) s_instance->onIdle();
 }
@@ -621,7 +658,9 @@ void EuclidEngine::onDisplay() {
 	m_tesseract.render(frame);
 
 	const WorkspacePresentation presentation =
-		m_tesseract.presentation();
+		m_hostModalMode != HostModalMode::Hidden
+		? buildHostModalPresentation()
+		: m_tesseract.presentation();
 
 	m_viewport.drawOverlay(
 		presentation,
@@ -665,6 +704,10 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
 		case CameraProcessor::CAM_SINGLE_PARTICLE_ORBIT_CLOSE:
 		case CameraProcessor::CAM_SINGLE_PARTICLE_WORKPLANE_LOCKED:
 			m_camera.zoomParticleWorkspaceByWheel(button);
+			break;
+		case CameraProcessor::CAM_STANDARD_OBJECT_ORBIT:
+		case CameraProcessor::CAM_STANDARD_OBJECT_SELECTION_LOCKED:
+			m_camera.zoomObjectPreviewByWheel(button);
 			break;
 		default:
 			m_camera.zoomByWheel(button);
@@ -728,6 +771,18 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 	const KeyboardInput::KeyEvent event =
 		m_keyboard.onKey(key, x, y);
+	const bool adjustmentKey =
+		event.signal == KeyboardInput::KEY_A ||
+		event.signal == KeyboardInput::KEY_D;
+
+	// FreeGLUT may also deliver platform-generated key-down repeats. Once a
+	// controlled hold is active, suppress those duplicates so repeat speed is
+	// deterministic and the initial key press is applied exactly once.
+	if (adjustmentKey && event.signal == m_heldAdjustmentSignal)
+		return;
+
+	if (!adjustmentKey || m_heldAdjustmentSignal != KeyboardInput::KEY_NONE)
+		clearHeldAdjustmentInput();
 
 	// GOLD modal priority: OBJ, then named asset persistence,
 	// then any remaining generic host workflow.
@@ -766,11 +821,27 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 	// ---------------------------------------------------------
 	// Workspace command.
 	// ---------------------------------------------------------
+	bool workspaceHandled = false;
 	if (result.hasWorkspaceInput) {
-		if (m_tesseract.handleInput(result.workspaceInput)) {
+		workspaceHandled = m_tesseract.handleInput(result.workspaceInput);
+		if (workspaceHandled) {
 			consumeWorkspaceHostRequest();
 			rebuildMenus();
 			glutPostRedisplay();
+		}
+	}
+
+	if (adjustmentKey) {
+		m_heldAdjustmentSignal = event.signal;
+		m_heldAdjustmentRawKey = key;
+		m_heldAdjustmentX = x;
+		m_heldAdjustmentY = y;
+		m_nextHeldAdjustmentRepeatMs = 0;
+		if (workspaceHandled &&
+			m_tesseract.allowsInputRepeat(result.workspaceInput)) {
+			m_nextHeldAdjustmentRepeatMs =
+				glutGet(GLUT_ELAPSED_TIME) +
+				kHeldAdjustmentInitialDelayMs;
 		}
 	}
 
@@ -783,6 +854,54 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
 
 		rebuildMenus();
 	}
+}
+
+void EuclidEngine::onKeyboardUp(unsigned char key, int x, int y) {
+	(void)x;
+	(void)y;
+	const KeyboardInput::KeyEvent event =
+		m_keyboard.onKey(key, 0, 0);
+	if (event.signal == m_heldAdjustmentSignal)
+		clearHeldAdjustmentInput();
+}
+
+void EuclidEngine::clearHeldAdjustmentInput() {
+	m_heldAdjustmentSignal = KeyboardInput::KEY_NONE;
+	m_heldAdjustmentRawKey = 0;
+	m_heldAdjustmentX = 0;
+	m_heldAdjustmentY = 0;
+	m_nextHeldAdjustmentRepeatMs = 0;
+}
+
+void EuclidEngine::advanceHeldAdjustmentInput(int currentTimeMs) {
+	if (m_heldAdjustmentSignal == KeyboardInput::KEY_NONE ||
+		m_nextHeldAdjustmentRepeatMs <= 0 ||
+		currentTimeMs < m_nextHeldAdjustmentRepeatMs)
+		return;
+
+	if (isAnyHostModalActive() || m_tesseract.workspaceInputLocked()) {
+		clearHeldAdjustmentInput();
+		return;
+	}
+
+	const KeyboardInput::KeyEvent event = m_keyboard.onKey(
+		m_heldAdjustmentRawKey,
+		m_heldAdjustmentX,
+		m_heldAdjustmentY);
+	const TheArbiter::ArbiterResult result =
+		m_arbiter.routeKeyboard(event);
+
+	if (!result.hasWorkspaceInput ||
+		!m_tesseract.allowsInputRepeat(result.workspaceInput) ||
+		!m_tesseract.handleInput(result.workspaceInput)) {
+		clearHeldAdjustmentInput();
+		return;
+	}
+
+	consumeWorkspaceHostRequest();
+	glutPostRedisplay();
+	m_nextHeldAdjustmentRepeatMs =
+		currentTimeMs + kHeldAdjustmentRepeatIntervalMs;
 }
 
 void EuclidEngine::onIdle() {
@@ -804,6 +923,7 @@ void EuclidEngine::onIdle() {
 	// window stalls, etc.
 	// ---------------------------------------------------------
 	deltaTime = (std::min)(deltaTime, 0.050f);
+	advanceHeldAdjustmentInput(currentTimeMs);
 
 	// ---------------------------------------------------------
 	// Advance host-side asynchronous persistence jobs.
@@ -1196,26 +1316,159 @@ bool EuclidEngine::isStaticParticleAssetModalActive() const {
 	return m_staticAssetPanel.mode != ViewPort::ObjExportPanelMode::HIDDEN;
 }
 
+void EuclidEngine::refreshTextureMap2DOutputCatalog() {
+	std::vector<vitru::StaticAssetCatalogEntry> catalog =
+		vitru::enumerateStaticParticleAssets(
+			m_inputsRoot,
+			m_outputRoot / "STATIC_PARTICLES");
+
+	catalog.erase(
+		std::remove_if(
+			catalog.begin(), catalog.end(),
+			[](const vitru::StaticAssetCatalogEntry& entry) {
+				return entry.source != "OUTPUT";
+			}),
+		catalog.end());
+
+	m_tesseract.replaceTextureMap2DOutputCatalog(std::move(catalog));
+}
+
+void EuclidEngine::refreshTextureMap2DBaseMaterialCatalog() {
+	const fs::path root =
+		m_inputsRoot / "TEXTURE_MAP_2D" / "BASE_MATERIALS";
+	std::error_code error;
+	std::vector<vitru::BaseMaterialCatalogEntry> catalog;
+	if (fs::is_directory(root, error) && !error) {
+		fs::recursive_directory_iterator iterator(
+			root, fs::directory_options::skip_permission_denied, error);
+		const fs::recursive_directory_iterator end;
+		while (!error && iterator != end) {
+			const fs::directory_entry entry = *iterator;
+			std::error_code entryError;
+			std::string extension = entry.path().extension().string();
+			std::transform(extension.begin(), extension.end(),
+				extension.begin(), [](unsigned char c) {
+					return static_cast<char>(std::tolower(c));
+				});
+			if (entry.is_regular_file(entryError) && !entryError &&
+				extension == ".png") {
+				vitru::BaseMaterialCatalogEntry item;
+				item.id = entry.path().lexically_normal().generic_string();
+				item.displayName = entry.path().stem().string();
+				item.rootPath = entry.path().parent_path();
+				item.baseColorPath = entry.path();
+				vitru::ImageRGBA8 image;
+				std::string imageError;
+				item.valid = vitru::loadPngImage(
+					entry.path(), image, &imageError, true);
+				item.status = item.valid ? "READY" : imageError;
+				if (item.valid) {
+					item.width = image.width;
+					item.height = image.height;
+				}
+				catalog.push_back(std::move(item));
+			}
+			iterator.increment(error);
+		}
+	}
+	std::sort(catalog.begin(), catalog.end(),
+		[](const vitru::BaseMaterialCatalogEntry& a,
+			const vitru::BaseMaterialCatalogEntry& b) {
+			return a.displayName < b.displayName;
+		});
+	m_tesseract.replaceTextureMap2DBaseMaterialCatalog(
+		std::move(catalog));
+}
+
+void EuclidEngine::beginTextureMap2DTextEntry(
+	TextureMapTextPurpose purpose,
+	const std::string& suggestedName) {
+	if (isAnyHostModalActive()) return;
+	m_textureMapTextPurpose = purpose;
+	const char* prompt =
+		purpose == TextureMapTextPurpose::AssetSaveAs
+		? "STATIC PARTICLE ASSET NAME"
+		: "SURFACE TARGET NAME";
+	m_hostTextEntry.beginAssetName(prompt, suggestedName, 64);
+	m_hostModalMode = HostModalMode::SaveName;
+	m_hostModalMessage.clear();
+	glutDetachMenu(GLUT_RIGHT_BUTTON);
+}
+
+bool EuclidEngine::saveTextureMap2DCurrent() {
+	TextureMap2DWorkspace* workspace =
+		m_tesseract.textureMap2DWorkspace();
+	if (!workspace || workspace->session().dirty) return false;
+	const vitru::StaticParticleAsset* asset =
+		m_assetRepository.findStaticParticle(
+			workspace->target().assetId);
+	if (!asset || asset->name.empty()) return false;
+	vitru::StaticAssetOperationReport report;
+	const bool saved = vitru::saveStaticParticleBundle(
+		*asset, m_outputRoot, asset->name, m_workspaceObj, report);
+	workspace->completeSaveRequest(
+		saved, vitru::INVALID_ASSET_ID,
+		saved ? "SAVE CURRENT SP_ASSET: SUCCESS"
+			: "SAVE CURRENT SP_ASSET: FAILED");
+	if (saved) refreshTextureMap2DOutputCatalog();
+	return saved;
+}
+
+bool EuclidEngine::saveTextureMap2DAs(
+	const std::string& assetName) {
+	TextureMap2DWorkspace* workspace =
+		m_tesseract.textureMap2DWorkspace();
+	if (!workspace) return false;
+	vitru::StaticParticleAsset snapshot;
+	std::string diagnostic;
+	if (!workspace->buildSaveAsSnapshot(
+		assetName, snapshot, &diagnostic,
+		m_textureMapSaveAsSurfaceTargetName)) {
+		workspace->completeSaveRequest(
+			false, vitru::INVALID_ASSET_ID, diagnostic);
+		return false;
+	}
+	vitru::StaticAssetOperationReport report;
+	if (!vitru::saveStaticParticleBundle(
+		snapshot, m_outputRoot, assetName,
+		m_workspaceObj, report)) {
+		workspace->completeSaveRequest(
+			false, vitru::INVALID_ASSET_ID,
+			"SAVE STATIC PARTICLE AS: FAILED");
+		return false;
+	}
+	vitru::StaticParticleAsset reopened;
+	vitru::StaticAssetOperationReport loadReport;
+	if (!vitru::loadStaticParticleBundle(
+		report.manifestPath, reopened, loadReport,
+		nullptr, m_workspaceObj)) {
+		workspace->completeSaveRequest(
+			false, vitru::INVALID_ASSET_ID,
+			"SAVE AS RELOAD FAILED");
+		return false;
+	}
+	const vitru::AssetId id =
+		m_assetRepository.addStaticParticle(std::move(reopened));
+	m_assetRepository.setActiveStaticParticle(id);
+	const vitru::StaticParticleAsset* saved =
+		m_assetRepository.findStaticParticle(id);
+	if (m_renderer && saved)
+		m_renderer->loadParticleStaticAsset(*saved);
+	workspace->completeSaveRequest(
+		true, id,
+		"SAVE STATIC PARTICLE AS: SUCCESS");
+	refreshTextureMap2DOutputCatalog();
+	m_textureMapSaveAsSurfaceTargetName.clear();
+	return true;
+}
+
 void EuclidEngine::consumeWorkspaceHostRequest() {
 	using GridRequest = TextureMap2DWorkspace::HostRequestType;
 	const TextureMap2DWorkspace::HostRequest gridRequest =
 		m_tesseract.takeTextureMap2DHostRequest();
 
 	if (gridRequest.type == GridRequest::RefreshOutputCatalog) {
-		std::vector<vitru::StaticAssetCatalogEntry> catalog =
-			vitru::enumerateStaticParticleAssets(
-				m_inputsRoot,
-				m_outputRoot / "STATIC_PARTICLES");
-
-		catalog.erase(
-			std::remove_if(
-				catalog.begin(), catalog.end(),
-				[](const vitru::StaticAssetCatalogEntry& entry) {
-					return entry.source != "OUTPUT";
-				}),
-			catalog.end());
-
-		m_tesseract.replaceTextureMap2DOutputCatalog(std::move(catalog));
+		refreshTextureMap2DOutputCatalog();
 	}
 	else if (gridRequest.type == GridRequest::LoadTarget) {
 		const std::string targetName = gridRequest.target.displayName;
@@ -1301,6 +1554,40 @@ void EuclidEngine::consumeWorkspaceHostRequest() {
 						" | UV/TEXTURE PREREQUISITES NOT READY; CONFIGURATION LOCKED.");
 			}
 		}
+	}
+	else if (gridRequest.type ==
+		GridRequest::RefreshBaseMaterialCatalog) {
+		refreshTextureMap2DBaseMaterialCatalog();
+	}
+	else if (gridRequest.type == GridRequest::SaveCurrent) {
+		saveTextureMap2DCurrent();
+	}
+	else if (gridRequest.type == GridRequest::SaveAs) {
+		TextureMap2DWorkspace* workspace =
+			m_tesseract.textureMap2DWorkspace();
+		std::string suggestedName = gridRequest.suggestedName;
+		if (workspace && workspace->target().assetId !=
+			vitru::INVALID_ASSET_ID) {
+			const vitru::StaticParticleAsset* target =
+				m_assetRepository.findStaticParticle(
+					workspace->target().assetId);
+			if (target && !target->name.empty())
+				suggestedName = target->name;
+		}
+		if (suggestedName.empty()) suggestedName = "Static_Particle";
+		beginTextureMap2DTextEntry(
+			TextureMapTextPurpose::AssetSaveAs,
+			suggestedName);
+	}
+	else if (gridRequest.type ==
+		GridRequest::RequestSurfaceTargetName) {
+		beginTextureMap2DTextEntry(
+			TextureMapTextPurpose::SurfaceTargetCommit);
+	}
+	else if (gridRequest.type ==
+		GridRequest::RequestSurfaceTargetNameThenSaveAs) {
+		beginTextureMap2DTextEntry(
+			TextureMapTextPurpose::SurfaceTargetThenSaveAs);
 	}
 
 	using Request = SingleParticleWorkspace::HostRequest;
@@ -1724,13 +2011,83 @@ bool EuclidEngine::handleHostModalKeyboard(unsigned char rawKey) {
 	if (m_hostModalMode == HostModalMode::SaveName) {
 		const TextEntryAction action = m_hostTextEntry.handleRawKey(rawKey);
 		if (action == TextEntryAction::Committed) {
-			m_pendingStaticAssetName = m_hostTextEntry.getNormalizedText();
-			m_hostModalYesSelected = true;
-			m_hostModalMode = HostModalMode::SaveConfirm;
-			m_hostModalMessage = "Save named asset: " +
-				m_pendingStaticAssetName + " ?";
+			const std::string enteredName =
+				m_hostTextEntry.getNormalizedText();
+			if (m_textureMapTextPurpose == TextureMapTextPurpose::None) {
+				m_pendingStaticAssetName = enteredName;
+				m_hostModalYesSelected = true;
+				m_hostModalMode = HostModalMode::SaveConfirm;
+				m_hostModalMessage = "Save named asset: " +
+					m_pendingStaticAssetName + " ?";
+			}
+			else {
+				TextureMap2DWorkspace* workspace =
+					m_tesseract.textureMap2DWorkspace();
+				if (!workspace) {
+					m_hostModalMode = HostModalMode::Failed;
+					m_hostModalMessage =
+						"TEXTURE_MAP_2D workspace is unavailable.";
+					return true;
+				}
+
+				std::string diagnostic;
+				if (m_textureMapTextPurpose ==
+					TextureMapTextPurpose::SurfaceTargetCommit) {
+					if (workspace->completeTextEntry(
+						enteredName, false, &diagnostic)) {
+						closeHostModal();
+					}
+					else {
+						m_hostTextEntry.beginAssetName(
+							"SURFACE TARGET NAME", enteredName, 64);
+						m_hostModalMessage = diagnostic;
+					}
+				}
+				else if (m_textureMapTextPurpose ==
+					TextureMapTextPurpose::SurfaceTargetThenSaveAs) {
+					if (workspace->completeTextEntry(
+						enteredName, true, &diagnostic)) {
+						m_textureMapSaveAsAwaitingSurfaceName = false;
+						m_textureMapSaveAsSurfaceTargetName = enteredName;
+						std::string suggestedName = "Static_Particle";
+						const vitru::StaticParticleAsset* target =
+							m_assetRepository.findStaticParticle(
+								workspace->target().assetId);
+						if (target && !target->name.empty())
+							suggestedName = target->name;
+						m_textureMapTextPurpose =
+							TextureMapTextPurpose::AssetSaveAs;
+						m_hostTextEntry.beginAssetName(
+							"STATIC PARTICLE ASSET NAME",
+							suggestedName, 64);
+						m_hostModalMessage.clear();
+					}
+					else {
+						m_hostTextEntry.beginAssetName(
+							"SURFACE TARGET NAME", enteredName, 64);
+						m_hostModalMessage = diagnostic;
+					}
+				}
+				else {
+					const bool saved = saveTextureMap2DAs(enteredName);
+					m_hostModalMode = saved
+						? HostModalMode::Complete
+						: HostModalMode::Failed;
+					m_hostModalMessage = workspace->runtimeStatusMessage();
+					if (m_hostModalMessage.empty())
+						m_hostModalMessage = saved
+							? "SAVE STATIC PARTICLE AS: SUCCESS"
+							: "SAVE STATIC PARTICLE AS: FAILED";
+					if (!saved)
+						m_textureMapSaveAsSurfaceTargetName.clear();
+				}
+			}
 		}
-		else if (action == TextEntryAction::Cancelled) closeHostModal();
+		else if (action == TextEntryAction::Cancelled) {
+			m_textureMapSaveAsAwaitingSurfaceName = false;
+			m_textureMapSaveAsSurfaceTargetName.clear();
+			closeHostModal();
+		}
 		return true;
 	}
 	const unsigned char key = static_cast<unsigned char>(std::tolower(rawKey));
@@ -1773,8 +2130,12 @@ WorkspacePresentation EuclidEngine::buildHostModalPresentation() const {
 	};
 	p.panelVisible = true;
 	p.workspaceName = "VITRUGEN HOST";
-	p.layerLabel = "STATIC_PARTICLE_ASSET PERSISTENCE";
-	p.statusLine = m_hostModalMessage;
+	p.layerLabel = m_textureMapTextPurpose == TextureMapTextPurpose::None
+		? "STATIC_PARTICLE_ASSET PERSISTENCE"
+		: "TEXTURE_MAP_2D PERSISTENCE";
+	p.statusLine = !m_hostModalMessage.empty()
+		? m_hostModalMessage
+		: m_hostTextEntry.getStatusMessage();
 	WorkspacePanelSection section;
 	if (m_hostModalMode == HostModalMode::LoadSelect) {
 		section.heading = "Select Static Particle:";
@@ -1820,6 +2181,10 @@ void EuclidEngine::closeHostModal() {
 	m_staticAssetJobKind = StaticAssetJobKind::None;
 	m_pendingStaticAssetName.clear();
 	m_hostTextEntry.reset();
+	m_textureMapSaveAsAwaitingSurfaceName = false;
+	m_textureMapSaveAsSurfaceTargetName.clear();
+	m_textureMapTextPurpose = TextureMapTextPurpose::None;
+	rebuildMenus();
 }
 
 bool EuclidEngine::isObjExportModalActive() const {

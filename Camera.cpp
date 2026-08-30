@@ -487,6 +487,7 @@ bool CameraProcessor::orbitEnabled() const {
 	return !m_poseTransitionActive &&
 		m_behaviorMode != CAM_MENU_PREVIEW &&
 		m_behaviorMode != CAM_STANDARD_2D_LOCKED &&
+		m_behaviorMode != CAM_STANDARD_OBJECT_SELECTION_LOCKED &&
 		!isWorkplaneLocked();
 }
 
@@ -496,6 +497,11 @@ bool CameraProcessor::isSingleParticleCamera() const {
 		m_behaviorMode == CAM_SINGLE_PARTICLE_WORKPLANE_LOCKED ||
 		m_behaviorMode == CAM_SINGLE_PARTICLE_VOLUME ||
 		m_behaviorMode == CAM_SINGLE_PARTICLE_MARCHING_CUBES;
+}
+
+bool CameraProcessor::isObjectPreviewCamera() const {
+	return m_behaviorMode == CAM_STANDARD_OBJECT_ORBIT ||
+		m_behaviorMode == CAM_STANDARD_OBJECT_SELECTION_LOCKED;
 }
 
 bool CameraProcessor::isWorkplaneLocked() const {
@@ -530,42 +536,39 @@ float CameraProcessor::adaptivePocketZoomStep(
 }
 
 float CameraProcessor::getOrbitSensitivityScale() const {
-	if (!isSingleParticleCamera()) {
+	if (!isSingleParticleCamera() && !isObjectPreviewCamera())
 		return 1.0f;
-	}
 
-	if (isWorkplaneLocked()) {
+	if (isWorkplaneLocked() ||
+		m_behaviorMode == CAM_STANDARD_OBJECT_SELECTION_LOCKED)
 		return 0.0f;
+
+	if (isObjectPreviewCamera()) {
+		if (m_objectPreviewZs >= kObjectPreviewDampingStartZs)
+			return 1.0f;
+		const float t = clampCameraFloat(
+			(m_objectPreviewZs - kObjectPreviewZsMin) /
+			(kObjectPreviewDampingStartZs - kObjectPreviewZsMin),
+			0.0f, 1.0f);
+		const float smoothT = t * t * (3.0f - 2.0f * t);
+		return kSingleParticleOrbitMinScale +
+			(1.0f - kSingleParticleOrbitMinScale) * smoothT;
 	}
 
 	const bool volumeLike =
 		m_behaviorMode == CAM_SINGLE_PARTICLE_VOLUME ||
 		m_behaviorMode == CAM_SINGLE_PARTICLE_MARCHING_CUBES;
-
 	const float currentZs = volumeLike
-		? m_volumeRenderZs
-		: m_particleWorkspaceZs;
-
+		? m_volumeRenderZs : m_particleWorkspaceZs;
 	const float minZs = volumeLike
-		? kVolumeRenderZsMin
-		: kParticleWorkspaceZsMin;
-
+		? kVolumeRenderZsMin : kParticleWorkspaceZsMin;
 	const float dampingStartZs = volumeLike
-		? kVolumeRenderDampingStartZs
-		: kParticleWorkspaceDampingStartZs;
-
-	if (currentZs >= dampingStartZs) {
-		return 1.0f;
-	}
-
+		? kVolumeRenderDampingStartZs : kParticleWorkspaceDampingStartZs;
+	if (currentZs >= dampingStartZs) return 1.0f;
 	const float t = clampCameraFloat(
 		(currentZs - minZs) / (dampingStartZs - minZs),
-		0.0f,
-		1.0f
-	);
-
+		0.0f, 1.0f);
 	const float smoothT = t * t * (3.0f - 2.0f * t);
-
 	return kSingleParticleOrbitMinScale +
 		(1.0f - kSingleParticleOrbitMinScale) * smoothT;
 }
@@ -595,6 +598,7 @@ void CameraProcessor::updateBehavior() {
 		break;
 
 	case CAM_STANDARD_OBJECT_ORBIT:
+	case CAM_STANDARD_OBJECT_SELECTION_LOCKED:
 		setTargetStandardObject();
 		break;
 
@@ -744,6 +748,17 @@ void CameraProcessor::zoomByWheel(int wheelButton) {
 }
 
 void CameraProcessor::updatePocketZoomLag() {
+	// --- Generic close-object preview distance ---
+	m_objectPreviewZsTarget = clampCameraFloat(
+		m_objectPreviewZsTarget,
+		kObjectPreviewZsMin,
+		kObjectPreviewZsMax);
+	const float dzObject =
+		m_objectPreviewZsTarget - m_objectPreviewZs;
+	m_objectPreviewZs += dzObject * kPocketZoomInertia;
+	if (fabs(dzObject) < 0.001f)
+		m_objectPreviewZs = m_objectPreviewZsTarget;
+
 	// --- OpenGL SINGLE_PARTICLE / workplane pocket distance ---
 	m_particleWorkspaceZsTarget =
 		clampCameraFloat(
@@ -813,6 +828,23 @@ void CameraProcessor::zoomParticleWorkspaceByWheel(int wheelButton) {
 		);
 }
 
+void CameraProcessor::zoomObjectPreviewByWheel(int wheelButton) {
+	if (wheelButton != 3 && wheelButton != 4) return;
+
+	const float step = adaptivePocketZoomStep(
+		m_objectPreviewZsTarget,
+		kObjectPreviewZsMin,
+		kObjectPreviewDampingStartZs,
+		kPocketZoomBaseStep,
+		kPocketZoomMinStep);
+
+	m_objectPreviewZsTarget += wheelButton == 3 ? -step : step;
+	m_objectPreviewZsTarget = clampCameraFloat(
+		m_objectPreviewZsTarget,
+		kObjectPreviewZsMin,
+		kObjectPreviewZsMax);
+}
+
 void CameraProcessor::zoomVolumeRenderByWheel(int wheelButton) {
 	if (wheelButton != 3 && wheelButton != 4) return;
 
@@ -849,6 +881,11 @@ void CameraProcessor::resetParticleWorkspaceZoom() {
 		kParticleWorkspaceZsDefault;
 }
 
+void CameraProcessor::resetObjectPreviewZoom() {
+	m_objectPreviewZs = kObjectPreviewZsDefault;
+	m_objectPreviewZsTarget = kObjectPreviewZsDefault;
+}
+
 void CameraProcessor::resetVolumeRenderZoom() {
 	m_volumeRenderZs =
 		kVolumeRenderZsDefault;
@@ -858,6 +895,7 @@ void CameraProcessor::resetVolumeRenderZoom() {
 }
 
 void CameraProcessor::resetPocketZooms() {
+	resetObjectPreviewZoom();
 	resetParticleWorkspaceZoom();
 	resetVolumeRenderZoom();
 }

@@ -1,10 +1,13 @@
 #ifndef VITRUGEN_WORKSPACE_CONTEXT_H
 #define VITRUGEN_WORKSPACE_CONTEXT_H
 
+#include <filesystem>
+
 class EuclidRenderer;
 class TheArbiter;
 class ViewPort;
 class CameraProcessor;
+namespace vitru { class ProjectAssetRepository; }
 
 struct WorkspaceFrameContext {
 	
@@ -21,6 +24,7 @@ struct WorkspaceFrameContext {
 	float phiRad = 0.0f;
 
 	float zoom = 1.0f;
+	float objectPreviewZs = 48.0f;
 	float particleWorkspaceZs = 256.0f;
 	float volumeRenderZs = 256.0f;
 
@@ -34,6 +38,8 @@ struct WorkspaceServices {
 	TheArbiter* arbiter = nullptr;
 	ViewPort* viewport = nullptr;
 	CameraProcessor* camera = nullptr;
+	vitru::ProjectAssetRepository* assetRepository = nullptr;
+	std::filesystem::path projectRoot;
 };
 
 #endif

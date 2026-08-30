@@ -32,7 +32,8 @@ enum class WorkspaceSubLayerPanelLayout {
 	AssemblyOffsetTargetVolume0,
 	AssemblyOffsetTargetVolume1,
 	AssemblyApply,
-	MarchingCubesReport
+	MarchingCubesReport,
+	TextureMapCompact
 };
 
 struct WorkspacePanelRow {
@@ -87,6 +88,14 @@ struct WorkspaceNodeTrackPresentation {
 	int nodeCount = 0;
 };
 
+// Generic screen-space selection cursor. Workspaces provide semantic
+// visibility and position; ViewPort owns the shared visual treatment.
+struct WorkspaceSelectionCursorPresentation {
+	bool visible = false;
+	int x = 0;
+	int y = 0;
+};
+
 struct WorkspacePresentation {
 	
 	bool panelVisible = false;
@@ -120,6 +129,7 @@ struct WorkspacePresentation {
 	std::string footerLine2;
 
 	WorkspaceNodeTrackPresentation nodeTrack;
+	WorkspaceSelectionCursorPresentation selectionCursor;
 
 	WorkspaceRuntimeStatus runtimeStatus;
 };

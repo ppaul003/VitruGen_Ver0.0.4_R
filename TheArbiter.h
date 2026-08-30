@@ -32,7 +32,9 @@ public:
 		RETURN_GLOBAL_SHELL,
 
 		ENTER_WORKSPACE_CONFIGURATION,
-		RETURN_DOMAIN_SELECTION
+		RETURN_DOMAIN_SELECTION,
+		ENTER_ACTIVE_WORKSPACE,
+		RETURN_WORKSPACE_CONFIGURATION
 	};
 
 	enum class WorkspaceId {
@@ -168,6 +170,12 @@ public:
 		WorkspaceDomain domain,
 		WorkspaceId workspace);
 	void requestReturnToDomainSelection(
+		WorkspaceDomain domain,
+		WorkspaceId workspace);
+	void requestEnterActiveWorkspace(
+		WorkspaceDomain domain,
+		WorkspaceId workspace);
+	void requestReturnToWorkspaceConfiguration(
 		WorkspaceDomain domain,
 		WorkspaceId workspace);
 	bool hasNavigationRequest() const { return m_navigationRequest.type != NavigationRequestType::NONE; }

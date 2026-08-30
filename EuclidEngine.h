@@ -79,6 +79,13 @@ private:
 		Failed
 	};
 
+	enum class TextureMapTextPurpose {
+		None = 0,
+		SurfaceTargetCommit,
+		SurfaceTargetThenSaveAs,
+		AssetSaveAs
+	};
+
 	struct StaticAssetAsyncResult {
 		bool success = false;
 		vitru::StaticParticleAsset asset;
@@ -116,6 +123,7 @@ private:
 	static void sMainMenu(int value);
 	static void sMenuStatus(int status, int x, int y);
 	static void sKeyboard(unsigned char key, int x, int y);
+	static void sKeyboardUp(unsigned char key, int x, int y);
 	static void sIdle();
 	static void sClose();
 
@@ -126,10 +134,20 @@ private:
 	void onMotion(int x, int y);
 	void onPassiveMotion(int x, int y);
 	void onKeyboard(unsigned char key, int x, int y);
+	void onKeyboardUp(unsigned char key, int x, int y);
 	void onIdle();
 	void onClose();
+	void advanceHeldAdjustmentInput(int currentTimeMs);
+	void clearHeldAdjustmentInput();
 
 	void consumeWorkspaceHostRequest();
+	void refreshTextureMap2DOutputCatalog();
+	void refreshTextureMap2DBaseMaterialCatalog();
+	void beginTextureMap2DTextEntry(
+		TextureMapTextPurpose purpose,
+		const std::string& suggestedName = std::string{});
+	bool saveTextureMap2DCurrent();
+	bool saveTextureMap2DAs(const std::string& assetName);
 	bool handleHostModalKeyboard(unsigned char rawKey);
 	WorkspacePresentation buildHostModalPresentation() const;
 	bool makeCurrentStaticParticleAsset(vitru::StaticParticleAsset& output) const;
@@ -188,6 +206,14 @@ private:
 	bool m_displayEnabled = true;
 	bool m_exiting = false;
 	bool m_cleaned = false;
+	KeyboardInput::KeySignal m_heldAdjustmentSignal =
+		KeyboardInput::KEY_NONE;
+	unsigned char m_heldAdjustmentRawKey = 0;
+	int m_heldAdjustmentX = 0;
+	int m_heldAdjustmentY = 0;
+	int m_nextHeldAdjustmentRepeatMs = 0;
+	static constexpr int kHeldAdjustmentInitialDelayMs = 320;
+	static constexpr int kHeldAdjustmentRepeatIntervalMs = 35;
 
 	int m_menuId = 0;
 	std::vector<int> m_workspaceMenuCommands;
@@ -210,6 +236,8 @@ private:
 
 	bool m_textureMapSaveAsAwaitingSurfaceName = false;
 	std::string m_textureMapSaveAsSurfaceTargetName;
+	TextureMapTextPurpose m_textureMapTextPurpose =
+		TextureMapTextPurpose::None;
 
 	HostModalMode m_hostModalMode = HostModalMode::Hidden;
 	int m_hostModalSelectedIndex = 0;

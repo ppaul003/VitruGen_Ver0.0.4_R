@@ -31,6 +31,15 @@ public:
 		WorkspaceServices& services
 	) = 0;
 
+	// The host owns physical key timing; the cartridge remains the authority
+	// on where a repeated generic action has semantic meaning.
+	virtual bool allowsInputRepeat(
+		const WorkspaceInputEvent& input
+	) const {
+		(void)input;
+		return false;
+	}
+
 	virtual WorkspacePresentation
 		buildPresentation() const = 0;
 

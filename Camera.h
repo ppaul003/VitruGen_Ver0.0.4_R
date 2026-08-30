@@ -12,6 +12,7 @@ public:
 		CAM_STANDARD_3D_ORBIT,
 		CAM_STANDARD_2D_LOCKED,
 		CAM_STANDARD_OBJECT_ORBIT,
+		CAM_STANDARD_OBJECT_SELECTION_LOCKED,
 
 		// SINGLE_PARTICLE OpenGL / particle-anchor workspace.
 		CAM_SINGLE_PARTICLE_ORBIT_CLOSE,
@@ -59,6 +60,7 @@ public:
 
 	bool orbitEnabled() const;
 	bool isSingleParticleCamera() const;
+	bool isObjectPreviewCamera() const;
 	bool isWorkplaneLocked() const;
 	float getOrbitSensitivityScale() const;
 
@@ -77,12 +79,15 @@ public:
 	void updatePocketZoomLag();
 
 	float getParticleWorkspaceZs() const { return m_particleWorkspaceZs; }
+	float getObjectPreviewZs() const { return m_objectPreviewZs; }
 	float getVolumeRenderZs() const { return m_volumeRenderZs; }
 
 	void zoomParticleWorkspaceByWheel(int wheelButton);
+	void zoomObjectPreviewByWheel(int wheelButton);
 	void zoomVolumeRenderByWheel(int wheelButton);
 
 	void resetParticleWorkspaceZoom();
+	void resetObjectPreviewZoom();
 	void resetVolumeRenderZoom();
 	void resetPocketZooms();
 
@@ -136,6 +141,15 @@ private:
 	static constexpr float kPocketZoomMinStep = 0.35f;
 
 	static constexpr float kParticleWorkspaceDampingStartZs = 128.0f;
+
+	// Generic close-object pocket used by mesh-preview workspaces. Keeping
+	// this distance separate prevents TextureMap camera changes from altering
+	// SINGLE_PARTICLE's remembered zoom.
+	static constexpr float kObjectPreviewZsDefault = 48.0f;
+	static constexpr float kObjectPreviewZsMin = 32.0f;
+	static constexpr float kObjectPreviewZsMax = 192.0f;
+	static constexpr float kObjectPreviewDampingStartZs = 128.0f;
+
 	static constexpr float kVolumeRenderDampingStartZs = 128.0f;
 
 	static constexpr float kSingleParticleOrbitMinScale = 0.22f;
@@ -171,6 +185,12 @@ private:
 
 	float m_particleWorkspaceZsTarget =
 		kParticleWorkspaceZsDefault;
+
+	float m_objectPreviewZs =
+		kObjectPreviewZsDefault;
+
+	float m_objectPreviewZsTarget =
+		kObjectPreviewZsDefault;
 
 	float m_volumeRenderZs =
 		kVolumeRenderZsDefault;

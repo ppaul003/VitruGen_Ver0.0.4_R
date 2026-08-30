@@ -309,6 +309,24 @@ void TheArbiter::requestReturnToDomainSelection(
 	m_navigationRequest.workspace = workspace;
 }
 
+void TheArbiter::requestEnterActiveWorkspace(
+	WorkspaceDomain domain,
+	WorkspaceId workspace) {
+	m_navigationRequest.type =
+		NavigationRequestType::ENTER_ACTIVE_WORKSPACE;
+	m_navigationRequest.domain = domain;
+	m_navigationRequest.workspace = workspace;
+}
+
+void TheArbiter::requestReturnToWorkspaceConfiguration(
+	WorkspaceDomain domain,
+	WorkspaceId workspace) {
+	m_navigationRequest.type =
+		NavigationRequestType::RETURN_WORKSPACE_CONFIGURATION;
+	m_navigationRequest.domain = domain;
+	m_navigationRequest.workspace = workspace;
+}
+
 TheArbiter::NavigationRequest 
 TheArbiter::takeNavigationRequest() {
 

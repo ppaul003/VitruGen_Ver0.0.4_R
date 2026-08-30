@@ -61,6 +61,7 @@ public:
 	void render(const WorkspaceFrameContext& frame);
 
 	bool handleInput(const WorkspaceInputEvent& event);
+	bool allowsInputRepeat(const WorkspaceInputEvent& event) const;
 
 	WorkspacePresentation
 		presentation() const;
@@ -72,6 +73,8 @@ public:
 
 	TextureMap2DWorkspace::HostRequest takeTextureMap2DHostRequest();
 	void replaceTextureMap2DOutputCatalog(std::vector<vitru::StaticAssetCatalogEntry> catalog);
+	void replaceTextureMap2DBaseMaterialCatalog(
+		std::vector<vitru::BaseMaterialCatalogEntry> catalog);
 
 	void completeTextureMap2DTargetLoad(
 		bool loaded,
@@ -80,6 +83,12 @@ public:
 		const std::string& displayName,
 		const std::string& message
 	);
+	TextureMap2DWorkspace* textureMap2DWorkspace() {
+		return &m_texMap2DWorkspace;
+	}
+	const TextureMap2DWorkspace* textureMap2DWorkspace() const {
+		return &m_texMap2DWorkspace;
+	}
 
 	bool exportSingleParticleVolume(std::vector<float>& output) const;
 	bool restoreSingleParticleVolume(const std::vector<float>& input, const int3& size);

@@ -874,6 +874,8 @@ void ViewPort::drawOverlay(
 		}
 	}
 
+	drawSelectionCursor(presentation.selectionCursor);
+
 	// ---------------------------------------------------------
 	// Host modal must render LAST.
 	//
@@ -884,6 +886,31 @@ void ViewPort::drawOverlay(
 		drawObjExportPanel(*modalData);
 
 	endOverlay2D();
+}
+
+void ViewPort::drawSelectionCursor(
+	const WorkspaceSelectionCursorPresentation& cursor) {
+	if (!cursor.visible) return;
+
+	glUseProgram(0);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glLineWidth(2.0f);
+	glColor4f(1.0f, 1.0f, 0.15f, 0.95f);
+
+	const float x = static_cast<float>(cursor.x);
+	const float y = static_cast<float>(cursor.y);
+	const float halfSize = 10.0f;
+	glBegin(GL_LINES);
+	glVertex2f(x - halfSize, y);
+	glVertex2f(x + halfSize, y);
+	glVertex2f(x, y - halfSize);
+	glVertex2f(x, y + halfSize);
+	glEnd();
+
+	glLineWidth(1.0f);
 }
 
 void ViewPort::updateSubLayerPanelAnimation(bool visible) {
@@ -1171,6 +1198,62 @@ void ViewPort::drawSubLayerPresentation(const WorkspacePresentation& presentatio
 
 	using SubLayout = WorkspaceSubLayerPanelLayout;
 	const SubLayout explicitLayout = presentation.subLayerPanelLayout;
+
+	if (explicitLayout == SubLayout::TextureMapCompact) {
+		drawDivider(y0 + 105.0f);
+		float y = y0 + 145.0f;
+		const float infoX = labelX + 28.0f;
+		for (const WorkspacePanelSection& section :
+			presentation.sections) {
+			if (y >= y1 - 132.0f) break;
+			glColor4f(0.85f, 0.95f, 1.0f, alpha);
+			drawText2D(sectionX, y, section.heading.c_str(),
+				GLUT_BITMAP_HELVETICA_18);
+			y += 40.0f;
+			for (const WorkspacePanelRow& row : section.rows) {
+				if (y >= y1 - 126.0f) break;
+				const float x = row.subordinate ? infoX : labelX;
+				if (row.selectable) {
+					if (row.selected) {
+						glColor4f(0.45f, 1.0f, 0.65f, alpha);
+						drawText2D(x - 22.0f, y, ">",
+							GLUT_BITMAP_HELVETICA_18);
+					}
+					else glColor4f(0.72f, 0.78f, 0.82f, alpha);
+				}
+				else if (row.emphasized ||
+					row.tone == WorkspaceStatusTone::Ready)
+					glColor4f(0.45f, 1.0f, 0.65f, alpha);
+				else glColor4f(0.72f, 0.78f, 0.82f, alpha);
+				string line = row.label;
+				if (!row.value.empty()) {
+					line += " { ";
+					line += row.value;
+					line += " }";
+				}
+				drawText2D(x, y, line.c_str(),
+					row.subordinate
+					? GLUT_BITMAP_HELVETICA_12
+					: GLUT_BITMAP_HELVETICA_18);
+				y += row.subordinate ? 24.0f : 34.0f;
+			}
+			drawDivider(y + 4.0f);
+			y += 28.0f;
+		}
+		drawDivider(y1 - 92.0f);
+		glColor4f(0.75f, 0.75f, 0.75f, alpha);
+		drawText2D(sectionX, y1 - 58.0f,
+			presentation.footerLine1.c_str(),
+			GLUT_BITMAP_HELVETICA_12);
+		if (!presentation.footerLine2.empty()) {
+			glColor4f(0.85f, 0.95f, 1.0f, alpha);
+			drawText2D(sectionX, y1 - 34.0f,
+				presentation.footerLine2.c_str(),
+				GLUT_BITMAP_HELVETICA_12);
+		}
+		glLineWidth(1.0f);
+		return;
+	}
 
 	// GOLD Sub-Layer 2/3 coordinates. The workspace selects a
 	// semantic layout; ViewPort remains responsible for geometry.
